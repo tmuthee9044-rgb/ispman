@@ -177,7 +177,7 @@ EOF
     print_success "Environment configuration created"
 }
 
-# Create package.json
+# Create package.json with correct dependencies
 create_package_json() {
     print_step "Creating package.json..."
     

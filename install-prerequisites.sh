@@ -487,7 +487,7 @@ main() {
         print_success "All prerequisites have been successfully installed!"
         echo ""
         print_info "Next steps:"
-        echo "1. Run: ./complete-install.sh (to create the ISP system)"
+        echo "1. Run: ./complete-system-install.sh (to create the ISP system)"
         echo "2. Run: ./start-system.sh (to start all services)"
         echo ""
         print_info "If you're on Linux and just added to docker group:"

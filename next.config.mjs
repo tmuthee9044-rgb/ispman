@@ -1,22 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
+  experimental: {
+    serverComponentsExternalPackages: ['pg']
+  },
+  images: {
+    domains: ['localhost'],
+    unoptimized: true
+  },
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL,
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: true,
-  },
-  output: 'standalone',
-  serverExternalPackages: ['mysql2'],
-  webpack: (config) => {
-    config.externals.push({
-      'mysql2': 'commonjs mysql2'
-    })
-    return config
-  }
 }
 
 export default nextConfig

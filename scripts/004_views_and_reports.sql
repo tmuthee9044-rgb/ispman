@@ -1,295 +1,188 @@
--- Views and Reports for ISP Management System
+-- ISP Management System - Views and Reports
+-- This script creates views for reporting and dashboard functionality
 
 -- Customer summary view
-CREATE OR REPLACE VIEW customer_summary AS
+CREATE VIEW customer_summary AS
 SELECT 
     c.id,
     c.customer_id,
-    CASE 
-        WHEN c.company_name IS NOT NULL THEN c.company_name
-        ELSE c.first_name || ' ' || COALESCE(c.last_name, '')
-    END as full_name,
+    c.first_name || ' ' || c.last_name as full_name,
     c.email,
     c.phone,
     c.status,
-    c.account_balance,
+    c.balance,
     c.created_at,
-    
-    -- Service information
-    COUNT(cs.id) as total_services,
-    COUNT(cs.id) FILTER (WHERE cs.status = 'active') as active_services,
-    SUM(cs.monthly_fee) FILTER (WHERE cs.status = 'active') as monthly_revenue,
-    
-    -- Payment information
-    COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'completed'), 0) as total_payments,
-    MAX(p.payment_date) FILTER (WHERE p.status = 'completed') as last_payment_date,
-    
-    -- Invoice information
-    COUNT(i.id) as total_invoices,
-    COUNT(i.id) FILTER (WHERE i.status = 'overdue') as overdue_invoices,
-    COALESCE(SUM(i.balance_due) FILTER (WHERE i.status IN ('pending', 'overdue')), 0) as outstanding_balance
-
+    COUNT(cs.id) as active_services,
+    COALESCE(SUM(cs.monthly_price), 0) as monthly_revenue,
+    (SELECT COUNT(*) FROM support_tickets st WHERE st.customer_id = c.id AND st.status IN ('open', 'in_progress')) as open_tickets,
+    (SELECT COUNT(*) FROM invoices i WHERE i.customer_id = c.id AND i.status = 'pending') as pending_invoices,
+    (SELECT SUM(i.total_amount) FROM invoices i WHERE i.customer_id = c.id AND i.status IN ('pending', 'overdue')) as outstanding_amount
 FROM customers c
-LEFT JOIN customer_services cs ON c.id = cs.customer_id
-LEFT JOIN payments p ON c.id = p.customer_id
-LEFT JOIN invoices i ON c.id = i.customer_id
-GROUP BY c.id, c.customer_id, c.first_name, c.last_name, c.company_name, 
-         c.email, c.phone, c.status, c.account_balance, c.created_at;
+LEFT JOIN customer_services cs ON c.id = cs.customer_id AND cs.status = 'active'
+GROUP BY c.id, c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.status, c.balance, c.created_at;
 
--- Service performance view
-CREATE OR REPLACE VIEW service_performance AS
+-- Financial dashboard view
+CREATE VIEW financial_dashboard AS
+SELECT 
+    (SELECT COUNT(*) FROM customers WHERE status = 'active') as active_customers,
+    (SELECT COUNT(*) FROM customer_services WHERE status = 'active') as active_services,
+    (SELECT COALESCE(SUM(monthly_price), 0) FROM customer_services WHERE status = 'active') as monthly_recurring_revenue,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE status = 'pending') as pending_invoices_amount,
+    (SELECT COALESCE(SUM(total_amount), 0) FROM invoices WHERE status = 'overdue') as overdue_invoices_amount,
+    (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'completed' AND payment_date >= CURRENT_DATE - INTERVAL '30 days') as payments_last_30_days,
+    (SELECT COUNT(*) FROM support_tickets WHERE status IN ('open', 'in_progress')) as open_support_tickets;
+
+-- Service plan performance view
+CREATE VIEW service_plan_performance AS
 SELECT 
     sp.id,
     sp.name,
-    sp.plan_code,
-    sp.monthly_fee,
-    sp.speed_down,
-    sp.speed_up,
-    
-    -- Subscription metrics
-    COUNT(cs.id) as total_subscriptions,
-    COUNT(cs.id) FILTER (WHERE cs.status = 'active') as active_subscriptions,
-    COUNT(cs.id) FILTER (WHERE cs.status = 'suspended') as suspended_subscriptions,
-    
-    -- Revenue metrics
-    SUM(cs.monthly_fee) FILTER (WHERE cs.status = 'active') as monthly_revenue,
-    AVG(cs.monthly_fee) as avg_monthly_fee,
-    
-    -- Customer satisfaction (based on service status)
-    ROUND(
-        (COUNT(cs.id) FILTER (WHERE cs.status = 'active')::DECIMAL / 
-         NULLIF(COUNT(cs.id), 0)) * 100, 2
-    ) as retention_rate
-
+    sp.monthly_price,
+    sp.download_speed,
+    sp.upload_speed,
+    COUNT(cs.id) as active_subscriptions,
+    COALESCE(SUM(cs.monthly_price), 0) as total_monthly_revenue,
+    AVG(EXTRACT(DAYS FROM (COALESCE(cs.termination_date, CURRENT_DATE) - cs.activation_date))) as avg_subscription_days,
+    (COUNT(cs.id) * 100.0 / NULLIF((SELECT COUNT(*) FROM customer_services WHERE status IN ('active', 'suspended', 'terminated')), 0)) as market_share_percentage
 FROM service_plans sp
-LEFT JOIN customer_services cs ON sp.id = cs.service_plan_id
-WHERE sp.active = true
-GROUP BY sp.id, sp.name, sp.plan_code, sp.monthly_fee, sp.speed_down, sp.speed_up
+LEFT JOIN customer_services cs ON sp.id = cs.service_plan_id AND cs.status = 'active'
+WHERE sp.is_active = true
+GROUP BY sp.id, sp.name, sp.monthly_price, sp.download_speed, sp.upload_speed
 ORDER BY active_subscriptions DESC;
 
--- Financial dashboard view
-CREATE OR REPLACE VIEW financial_dashboard AS
-SELECT 
-    -- Revenue metrics
-    COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'completed' AND p.payment_date >= CURRENT_DATE - INTERVAL '30 days'), 0) as revenue_last_30_days,
-    COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'completed' AND EXTRACT(MONTH FROM p.payment_date) = EXTRACT(MONTH FROM CURRENT_DATE)), 0) as revenue_current_month,
-    COALESCE(SUM(p.amount) FILTER (WHERE p.status = 'completed' AND EXTRACT(YEAR FROM p.payment_date) = EXTRACT(YEAR FROM CURRENT_DATE)), 0) as revenue_current_year,
-    
-    -- Outstanding amounts
-    COALESCE(SUM(i.balance_due) FILTER (WHERE i.status = 'pending'), 0) as pending_invoices,
-    COALESCE(SUM(i.balance_due) FILTER (WHERE i.status = 'overdue'), 0) as overdue_invoices,
-    COALESCE(SUM(i.balance_due) FILTER (WHERE i.status IN ('pending', 'overdue')), 0) as total_outstanding,
-    
-    -- Customer metrics
-    COUNT(DISTINCT c.id) as total_customers,
-    COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'active') as active_customers,
-    COUNT(DISTINCT cs.id) FILTER (WHERE cs.status = 'active') as active_services,
-    
-    -- Average metrics
-    ROUND(AVG(cs.monthly_fee) FILTER (WHERE cs.status = 'active'), 2) as avg_monthly_fee,
-    ROUND(AVG(c.account_balance), 2) as avg_account_balance
-
-FROM customers c
-LEFT JOIN customer_services cs ON c.id = cs.customer_id
-LEFT JOIN payments p ON c.id = p.customer_id
-LEFT JOIN invoices i ON c.id = i.customer_id;
-
--- Network status view
-CREATE OR REPLACE VIEW network_status AS
+-- Network status overview
+CREATE VIEW network_status_overview AS
 SELECT 
     nr.id,
     nr.name,
-    nr.router_type,
     nr.ip_address,
     nr.location,
     nr.status,
-    nr.cpu_load,
-    nr.memory_usage,
-    nr.bandwidth_usage,
-    nr.uptime,
     nr.last_ping,
-    
-    -- Connected services
-    COUNT(cs.id) as connected_services,
-    COUNT(cs.id) FILTER (WHERE cs.status = 'active') as active_connections,
-    
-    -- Performance indicators
+    nr.uptime_seconds,
+    nr.cpu_usage,
+    nr.memory_usage,
     CASE 
-        WHEN nr.cpu_load > 90 THEN 'Critical'
-        WHEN nr.cpu_load > 75 THEN 'Warning'
-        ELSE 'Normal'
-    END as cpu_status,
-    
-    CASE 
-        WHEN nr.memory_usage > 90 THEN 'Critical'
-        WHEN nr.memory_usage > 75 THEN 'Warning'
-        ELSE 'Normal'
-    END as memory_status,
-    
-    CASE 
-        WHEN nr.last_ping < CURRENT_TIMESTAMP - INTERVAL '5 minutes' THEN 'Offline'
-        WHEN nr.last_ping < CURRENT_TIMESTAMP - INTERVAL '1 minute' THEN 'Warning'
-        ELSE 'Online'
-    END as connectivity_status
-
+        WHEN nr.last_ping > CURRENT_TIMESTAMP - INTERVAL '5 minutes' THEN 'Online'
+        WHEN nr.last_ping > CURRENT_TIMESTAMP - INTERVAL '1 hour' THEN 'Warning'
+        ELSE 'Offline'
+    END as health_status,
+    COUNT(cs.id) as connected_customers
 FROM network_routers nr
-LEFT JOIN customer_services cs ON nr.id = cs.network_router_id
-GROUP BY nr.id, nr.name, nr.router_type, nr.ip_address, nr.location, 
-         nr.status, nr.cpu_load, nr.memory_usage, nr.bandwidth_usage, 
-         nr.uptime, nr.last_ping
-ORDER BY nr.name;
+LEFT JOIN customer_services cs ON nr.id = cs.router_id AND cs.status = 'active'
+GROUP BY nr.id, nr.name, nr.ip_address, nr.location, nr.status, nr.last_ping, nr.uptime_seconds, nr.cpu_usage, nr.memory_usage;
 
--- Payment summary view
-CREATE OR REPLACE VIEW payment_summary AS
-SELECT 
-    DATE_TRUNC('month', p.payment_date) as payment_month,
-    p.payment_method,
-    COUNT(*) as transaction_count,
-    SUM(p.amount) as total_amount,
-    AVG(p.amount) as avg_amount,
-    MIN(p.amount) as min_amount,
-    MAX(p.amount) as max_amount,
-    
-    -- Success rate
-    ROUND(
-        (COUNT(*) FILTER (WHERE p.status = 'completed')::DECIMAL / COUNT(*)) * 100, 2
-    ) as success_rate
-
-FROM payments p
-WHERE p.payment_date >= CURRENT_DATE - INTERVAL '12 months'
-GROUP BY DATE_TRUNC('month', p.payment_date), p.payment_method
-ORDER BY payment_month DESC, p.payment_method;
-
--- Customer activity view
-CREATE OR REPLACE VIEW customer_activity AS
-SELECT 
-    c.id,
-    c.customer_id,
-    CASE 
-        WHEN c.company_name IS NOT NULL THEN c.company_name
-        ELSE c.first_name || ' ' || COALESCE(c.last_name, '')
-    END as full_name,
-    c.status,
-    c.last_login,
-    
-    -- Recent activity
-    MAX(p.payment_date) as last_payment,
-    MAX(i.invoice_date) as last_invoice,
-    COUNT(sl.id) FILTER (WHERE sl.timestamp >= CURRENT_DATE - INTERVAL '30 days') as recent_activities,
-    
-    -- Service status
-    COUNT(cs.id) FILTER (WHERE cs.status = 'active') as active_services,
-    COUNT(cs.id) FILTER (WHERE cs.status = 'suspended') as suspended_services,
-    
-    -- Account health
-    c.account_balance,
-    COALESCE(SUM(i.balance_due) FILTER (WHERE i.status IN ('pending', 'overdue')), 0) as outstanding_balance,
-    
-    -- Activity score (0-100)
-    CASE 
-        WHEN c.last_login >= CURRENT_DATE - INTERVAL '7 days' THEN 100
-        WHEN c.last_login >= CURRENT_DATE - INTERVAL '30 days' THEN 75
-        WHEN c.last_login >= CURRENT_DATE - INTERVAL '90 days' THEN 50
-        WHEN c.last_login IS NOT NULL THEN 25
-        ELSE 0
-    END as activity_score
-
-FROM customers c
-LEFT JOIN customer_services cs ON c.id = cs.customer_id
-LEFT JOIN payments p ON c.id = p.customer_id
-LEFT JOIN invoices i ON c.id = i.customer_id
-LEFT JOIN system_logs sl ON c.id = sl.customer_id
-GROUP BY c.id, c.customer_id, c.first_name, c.last_name, c.company_name, 
-         c.status, c.last_login, c.account_balance
-ORDER BY activity_score DESC, c.last_login DESC;
-
--- Equipment utilization view
-CREATE OR REPLACE VIEW equipment_utilization AS
-SELECT 
-    cr.equipment_type,
-    cr.brand,
-    cr.model,
-    COUNT(*) as total_units,
-    COUNT(*) FILTER (WHERE cr.status = 'available') as available_units,
-    COUNT(*) FILTER (WHERE cr.status = 'allocated') as allocated_units,
-    COUNT(*) FILTER (WHERE cr.status = 'maintenance') as maintenance_units,
-    COUNT(*) FILTER (WHERE cr.status = 'damaged') as damaged_units,
-    
-    -- Utilization rate
-    ROUND(
-        (COUNT(*) FILTER (WHERE cr.status = 'allocated')::DECIMAL / COUNT(*)) * 100, 2
-    ) as utilization_rate,
-    
-    -- Average age
-    ROUND(AVG(EXTRACT(DAYS FROM CURRENT_DATE - cr.purchase_date)) / 365.25, 1) as avg_age_years,
-    
-    -- Total value
-    SUM(cr.purchase_price) as total_purchase_value,
-    AVG(cr.purchase_price) as avg_purchase_price
-
-FROM customer_routers cr
-GROUP BY cr.equipment_type, cr.brand, cr.model
-ORDER BY utilization_rate DESC, total_units DESC;
-
--- Monthly revenue report view
-CREATE OR REPLACE VIEW monthly_revenue_report AS
+-- Payment analytics view
+CREATE VIEW payment_analytics AS
 SELECT 
     DATE_TRUNC('month', payment_date) as month,
-    EXTRACT(YEAR FROM payment_date) as year,
-    EXTRACT(MONTH FROM payment_date) as month_num,
-    TO_CHAR(payment_date, 'Month YYYY') as month_name,
-    
-    -- Payment metrics
-    COUNT(*) as total_transactions,
-    SUM(amount) as total_revenue,
-    AVG(amount) as avg_transaction,
-    
-    -- Payment methods breakdown
-    SUM(amount) FILTER (WHERE payment_method = 'M-Pesa') as mpesa_revenue,
-    SUM(amount) FILTER (WHERE payment_method = 'Airtel Money') as airtel_revenue,
-    SUM(amount) FILTER (WHERE payment_method = 'Bank Transfer') as bank_revenue,
-    SUM(amount) FILTER (WHERE payment_method = 'Cash') as cash_revenue,
-    
-    -- Growth metrics
-    LAG(SUM(amount)) OVER (ORDER BY DATE_TRUNC('month', payment_date)) as previous_month_revenue,
-    ROUND(
-        ((SUM(amount) - LAG(SUM(amount)) OVER (ORDER BY DATE_TRUNC('month', payment_date))) / 
-         NULLIF(LAG(SUM(amount)) OVER (ORDER BY DATE_TRUNC('month', payment_date)), 0)) * 100, 2
-    ) as growth_rate
+    payment_method,
+    COUNT(*) as transaction_count,
+    SUM(amount) as total_amount,
+    AVG(amount) as average_amount,
+    COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_transactions,
+    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_transactions,
+    (COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / COUNT(*)) as success_rate
+FROM payments 
+WHERE payment_date >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY DATE_TRUNC('month', payment_date), payment_method
+ORDER BY month DESC, payment_method;
 
-FROM payments
-WHERE status = 'completed'
-AND payment_date >= CURRENT_DATE - INTERVAL '24 months'
-GROUP BY DATE_TRUNC('month', payment_date), EXTRACT(YEAR FROM payment_date), EXTRACT(MONTH FROM payment_date)
-ORDER BY month DESC;
+-- Customer service history view
+CREATE VIEW customer_service_history AS
+SELECT 
+    c.customer_id,
+    c.first_name || ' ' || c.last_name as customer_name,
+    sp.name as service_plan,
+    cs.status,
+    cs.activation_date,
+    cs.suspension_date,
+    cs.termination_date,
+    cs.monthly_price,
+    cs.ip_address,
+    EXTRACT(DAYS FROM (COALESCE(cs.termination_date, CURRENT_DATE) - cs.activation_date)) as service_duration_days,
+    (cs.monthly_price * EXTRACT(DAYS FROM (COALESCE(cs.termination_date, CURRENT_DATE) - cs.activation_date)) / 30.0) as total_revenue
+FROM customer_services cs
+JOIN customers c ON cs.customer_id = c.id
+JOIN service_plans sp ON cs.service_plan_id = sp.id
+ORDER BY cs.activation_date DESC;
+
+-- Equipment utilization view
+CREATE VIEW equipment_utilization AS
+SELECT 
+    equipment_type,
+    brand,
+    model,
+    COUNT(*) as total_units,
+    COUNT(CASE WHEN status = 'available' THEN 1 END) as available_units,
+    COUNT(CASE WHEN status = 'allocated' THEN 1 END) as allocated_units,
+    COUNT(CASE WHEN status = 'maintenance' THEN 1 END) as maintenance_units,
+    COUNT(CASE WHEN status = 'faulty' THEN 1 END) as faulty_units,
+    (COUNT(CASE WHEN status = 'allocated' THEN 1 END) * 100.0 / COUNT(*)) as utilization_percentage
+FROM equipment_inventory
+GROUP BY equipment_type, brand, model
+ORDER BY utilization_percentage DESC;
 
 -- Create materialized views for better performance on large datasets
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_customer_summary AS
-SELECT * FROM customer_summary;
-
-CREATE MATERIALIZED VIEW IF NOT EXISTS mv_financial_dashboard AS
-SELECT * FROM financial_dashboard;
+CREATE MATERIALIZED VIEW mv_monthly_revenue AS
+SELECT 
+    DATE_TRUNC('month', p.payment_date) as month,
+    COUNT(DISTINCT p.customer_id) as paying_customers,
+    COUNT(p.id) as total_payments,
+    SUM(p.amount) as total_revenue,
+    AVG(p.amount) as average_payment,
+    SUM(CASE WHEN p.payment_method = 'mpesa' THEN p.amount ELSE 0 END) as mpesa_revenue,
+    SUM(CASE WHEN p.payment_method = 'airtel_money' THEN p.amount ELSE 0 END) as airtel_revenue,
+    SUM(CASE WHEN p.payment_method = 'bank_transfer' THEN p.amount ELSE 0 END) as bank_revenue
+FROM payments p
+WHERE p.status = 'completed' 
+AND p.payment_date >= CURRENT_DATE - INTERVAL '24 months'
+GROUP BY DATE_TRUNC('month', p.payment_date)
+ORDER BY month;
 
 -- Create indexes on materialized views
-CREATE INDEX IF NOT EXISTS idx_mv_customer_summary_status ON mv_customer_summary(status);
-CREATE INDEX IF NOT EXISTS idx_mv_customer_summary_balance ON mv_customer_summary(account_balance);
+CREATE INDEX idx_mv_monthly_revenue_month ON mv_monthly_revenue(month);
 
 -- Function to refresh materialized views
 CREATE OR REPLACE FUNCTION refresh_materialized_views()
 RETURNS VOID AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW mv_customer_summary;
-    REFRESH MATERIALIZED VIEW mv_financial_dashboard;
-    
-    -- Log the refresh
-    PERFORM log_system_event(
-        'INFO'::log_level,
-        'Database Maintenance',
-        'system',
-        'Materialized views refreshed',
-        NULL,
-        NULL,
-        jsonb_build_object('timestamp', CURRENT_TIMESTAMP)
-    );
+    REFRESH MATERIALIZED VIEW mv_monthly_revenue;
+    PERFORM log_activity('materialized_views', 'REFRESH', 'mv_monthly_revenue', 
+        jsonb_build_object('refreshed_at', CURRENT_TIMESTAMP));
 END;
 $$ LANGUAGE plpgsql;
+
+-- Create a view for overdue accounts
+CREATE VIEW overdue_accounts AS
+SELECT 
+    c.customer_id,
+    c.first_name || ' ' || c.last_name as customer_name,
+    c.email,
+    c.phone,
+    c.balance,
+    COUNT(i.id) as overdue_invoices,
+    SUM(i.total_amount) as total_overdue_amount,
+    MIN(i.due_date) as oldest_due_date,
+    MAX(i.due_date) as newest_due_date,
+    EXTRACT(DAYS FROM (CURRENT_DATE - MIN(i.due_date))) as days_overdue
+FROM customers c
+JOIN invoices i ON c.id = i.customer_id
+WHERE i.status = 'overdue' OR (i.status = 'pending' AND i.due_date < CURRENT_DATE)
+GROUP BY c.id, c.customer_id, c.first_name, c.last_name, c.email, c.phone, c.balance
+ORDER BY total_overdue_amount DESC;
+
+-- Support ticket analytics view
+CREATE VIEW support_ticket_analytics AS
+SELECT 
+    DATE_TRUNC('month', created_at) as month,
+    priority,
+    status,
+    COUNT(*) as ticket_count,
+    AVG(EXTRACT(HOURS FROM (COALESCE(resolved_at, CURRENT_TIMESTAMP) - created_at))) as avg_resolution_hours,
+    COUNT(CASE WHEN resolved_at IS NOT NULL THEN 1 END) as resolved_tickets,
+    (COUNT(CASE WHEN resolved_at IS NOT NULL THEN 1 END) * 100.0 / COUNT(*)) as resolution_rate
+FROM support_tickets
+WHERE created_at >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY DATE_TRUNC('month', created_at), priority, status
+ORDER BY month DESC, priority, status;

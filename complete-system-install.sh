@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Complete ISP Management System Installation Script
-# This script installs ALL prerequisites and creates a fully functional system
+# ISP Management System - Complete Installation Script
+# This script creates the complete ISP management system after prerequisites are installed
 
 set -e
 
@@ -44,96 +44,93 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-install_docker() {
-    if command_exists docker; then
-        print_success "Docker already installed"
-        return
+# Check prerequisites
+check_prerequisites() {
+    print_step "Checking prerequisites..."
+    
+    local missing_deps=()
+    
+    if ! command_exists docker; then
+        missing_deps+=("docker")
     fi
     
-    print_step "Installing Docker..."
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        # Ubuntu/Debian
-        if command_exists apt-get; then
-            sudo apt-get update
-            sudo apt-get install -y ca-certificates curl gnupg lsb-release
-            sudo mkdir -p /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-        # CentOS/RHEL
-        elif command_exists yum; then
-            sudo yum install -y yum-utils
-            sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
+        missing_deps+=("docker-compose")
+    fi
+    
+    if ! command_exists node; then
+        missing_deps+=("node")
+    else
+        NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+        if [ "$NODE_VERSION" -lt 18 ]; then
+            missing_deps+=("node>=18")
         fi
-        sudo systemctl start docker
-        sudo systemctl enable docker
-        sudo usermod -aG docker $USER
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        print_info "Please install Docker Desktop for Mac from https://docker.com/products/docker-desktop"
+    fi
+    
+    if ! command_exists npm; then
+        missing_deps+=("npm")
+    fi
+    
+    if ! command_exists curl; then
+        missing_deps+=("curl")
+    fi
+    
+    if [ ${#missing_deps[@]} -ne 0 ]; then
+        print_error "Missing prerequisites: ${missing_deps[*]}"
+        print_info "Please run ./install-prerequisites.sh first"
         exit 1
     fi
-    print_success "Docker installed successfully"
-}
-
-install_node() {
-    if command_exists node; then
-        NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-        if [ "$NODE_VERSION" -ge 18 ]; then
-            print_success "Node.js $NODE_VERSION already installed"
-            return
-        fi
+    
+    # Check if Docker is running
+    if ! docker info >/dev/null 2>&1; then
+        print_error "Docker is installed but not running"
+        print_info "Please start Docker and try again"
+        exit 1
     fi
     
-    print_step "Installing Node.js 18..."
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-        sudo apt-get install -y nodejs
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        if command_exists brew; then
-            brew install node@18
-        else
-            print_info "Please install Node.js 18 from https://nodejs.org"
-            exit 1
-        fi
-    fi
-    print_success "Node.js installed successfully"
+    print_success "All prerequisites are available"
 }
 
-print_header "ISP Management System - Complete Installation"
-echo ""
-print_info "This will install ALL prerequisites and create a fully functional ISP management system"
-echo ""
-
-# Install prerequisites
-print_step "Checking and installing prerequisites..."
-install_docker
-install_node
+# Generate secrets
+generate_secrets() {
+    print_step "Generating authentication secrets..."
+    
+    if command_exists openssl; then
+        NEXTAUTH_SECRET=$(openssl rand -hex 32)
+        JWT_SECRET=$(openssl rand -hex 32)
+        ENCRYPTION_KEY=$(openssl rand -hex 16)
+    elif command_exists python3; then
+        NEXTAUTH_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+        JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+        ENCRYPTION_KEY=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+    else
+        NEXTAUTH_SECRET="isp-secret-$(date +%s)-$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)"
+        JWT_SECRET="jwt-secret-$(date +%s)-$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32)"
+        ENCRYPTION_KEY=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
+    fi
+    
+    # Detect public IP for NEXTAUTH_URL
+    PUBLIC_IP=$(curl -s --connect-timeout 5 ifconfig.me 2>/dev/null || curl -s --connect-timeout 5 ipinfo.io/ip 2>/dev/null || echo "localhost")
+    NEXTAUTH_URL="http://localhost:3000"
+    
+    print_success "Secrets generated successfully"
+}
 
 # Create project structure
-print_step "Creating project structure..."
-mkdir -p {app/{api/auth/\[...nextauth\],customers,billing,network,settings,reports},components/{ui,modals},lib,hooks,types,public,scripts,logs,ssl,backup}
+create_project_structure() {
+    print_step "Creating project structure..."
+    
+    # Create all necessary directories
+    mkdir -p {app/{api/{auth/\[...nextauth\],health},customers,billing,network,settings,reports,portal},components/{ui,modals},lib,hooks,types,public,scripts,logs,ssl,backup}
+    
+    print_success "Project structure created"
+}
 
-# Generate secrets
-print_step "Generating authentication secrets..."
-if command_exists openssl; then
-    NEXTAUTH_SECRET=$(openssl rand -hex 32)
-elif command_exists python3; then
-    NEXTAUTH_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-else
-    NEXTAUTH_SECRET="isp-secret-$(date +%s)-$(openssl rand -hex 16 2>/dev/null || echo 'fallback')"
-fi
-
-# Detect public IP for NEXTAUTH_URL
-PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "localhost")
-NEXTAUTH_URL="http://localhost:3000"
-
-print_success "Secrets generated successfully"
-
-# Create comprehensive .env file
-print_step "Creating environment configuration..."
-cat > .env << EOF
+# Create environment configuration
+create_environment() {
+    print_step "Creating environment configuration..."
+    
+    cat > .env << EOF
 # Database Configuration
 DATABASE_URL=postgresql://isp_user:isp_password_2024@postgres:5432/isp_system
 POSTGRES_HOST=postgres
@@ -145,6 +142,7 @@ POSTGRES_PORT=5432
 # Authentication
 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
 NEXTAUTH_URL=${NEXTAUTH_URL}
+JWT_SECRET=${JWT_SECRET}
 
 # Application Configuration
 NODE_ENV=production
@@ -160,26 +158,30 @@ DEFAULT_TIMEZONE=Africa/Nairobi
 # Redis Configuration
 REDIS_URL=redis://redis:6379
 
-# M-Pesa Configuration (Optional)
+# Security
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
+
+# M-Pesa Configuration (Optional - Configure in settings)
 MPESA_CONSUMER_KEY=your_mpesa_consumer_key
 MPESA_CONSUMER_SECRET=your_mpesa_consumer_secret
 MPESA_BUSINESS_SHORT_CODE=174379
 MPESA_PASSKEY=your_mpesa_passkey
 
-# Email Configuration (Optional)
+# Email Configuration (Optional - Configure in settings)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
-
-# Security
-JWT_SECRET=${NEXTAUTH_SECRET}
-ENCRYPTION_KEY=$(echo $NEXTAUTH_SECRET | cut -c1-32)
 EOF
+    
+    print_success "Environment configuration created"
+}
 
-# Create package.json with all dependencies
-print_step "Creating package.json with all dependencies..."
-cat > package.json << 'EOF'
+# Create package.json
+create_package_json() {
+    print_step "Creating package.json..."
+    
+    cat > package.json << 'EOF'
 {
   "name": "isp-management-system",
   "version": "1.0.0",
@@ -190,9 +192,7 @@ cat > package.json << 'EOF'
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "db:migrate": "node scripts/migrate.js",
-    "db:seed": "node scripts/seed.js"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@next/font": "^14.0.4",
@@ -225,6 +225,7 @@ cat > package.json << 'EOF'
     "lucide-react": "^0.294.0",
     "next": "^14.0.4",
     "next-auth": "^4.24.5",
+    "next-themes": "^0.2.1",
     "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-day-picker": "^8.9.1",
@@ -252,10 +253,16 @@ cat > package.json << 'EOF'
   }
 }
 EOF
+    
+    print_success "package.json created"
+}
 
-# Create Next.js configuration
-print_step "Creating Next.js configuration..."
-cat > next.config.mjs << 'EOF'
+# Create Next.js configuration files
+create_nextjs_config() {
+    print_step "Creating Next.js configuration files..."
+    
+    # next.config.mjs
+    cat > next.config.mjs << 'EOF'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -287,9 +294,8 @@ const nextConfig = {
 export default nextConfig
 EOF
 
-# Create TypeScript configuration
-print_step "Creating TypeScript configuration..."
-cat > tsconfig.json << 'EOF'
+    # tsconfig.json
+    cat > tsconfig.json << 'EOF'
 {
   "compilerOptions": {
     "target": "es5",
@@ -320,9 +326,8 @@ cat > tsconfig.json << 'EOF'
 }
 EOF
 
-# Create Tailwind configuration
-print_step "Creating Tailwind configuration..."
-cat > tailwind.config.ts << 'EOF'
+    # tailwind.config.ts
+    cat > tailwind.config.ts << 'EOF'
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
@@ -401,8 +406,8 @@ const config: Config = {
 export default config
 EOF
 
-# Create PostCSS configuration
-cat > postcss.config.mjs << 'EOF'
+    # postcss.config.mjs
+    cat > postcss.config.mjs << 'EOF'
 /** @type {import('postcss-load-config').Config} */
 const config = {
   plugins: {
@@ -414,9 +419,15 @@ const config = {
 export default config
 EOF
 
-# Create main application layout
-print_step "Creating main application layout..."
-cat > app/layout.tsx << 'EOF'
+    print_success "Next.js configuration files created"
+}
+
+# Create application files
+create_application_files() {
+    print_step "Creating application files..."
+    
+    # app/layout.tsx
+    cat > app/layout.tsx << 'EOF'
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
@@ -447,8 +458,8 @@ export default function RootLayout({
 }
 EOF
 
-# Create providers
-cat > app/providers.tsx << 'EOF'
+    # app/providers.tsx
+    cat > app/providers.tsx << 'EOF'
 'use client'
 
 import { SessionProvider } from 'next-auth/react'
@@ -470,8 +481,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 EOF
 
-# Create global CSS
-cat > app/globals.css << 'EOF'
+    # app/globals.css
+    cat > app/globals.css << 'EOF'
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -533,9 +544,8 @@ cat > app/globals.css << 'EOF'
 }
 EOF
 
-# Create main page
-print_step "Creating main application page..."
-cat > app/page.tsx << 'EOF'
+    # app/page.tsx
+    cat > app/page.tsx << 'EOF'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users, Wifi, CreditCard, Settings, BarChart3, Headphones } from 'lucide-react'
@@ -711,11 +721,62 @@ export default function HomePage() {
 }
 EOF
 
-# Create essential UI components
-print_step "Creating UI components..."
+    print_success "Application files created"
+}
 
-# Button component
-cat > components/ui/button.tsx << 'EOF'
+# Create essential components
+create_components() {
+    print_step "Creating essential components..."
+    
+    # lib/utils.ts
+    cat > lib/utils.ts << 'EOF'
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+export function formatCurrency(amount: number, currency: string = 'KES'): string {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency: currency,
+  }).format(amount)
+}
+
+export function formatDate(date: Date | string): string {
+  return new Intl.DateTimeFormat('en-KE', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(date))
+}
+EOF
+
+    # lib/db.ts
+    cat > lib/db.ts << 'EOF'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+})
+
+export async function query(text: string, params?: any[]) {
+  const client = await pool.connect()
+  try {
+    const result = await client.query(text, params)
+    return result
+  } finally {
+    client.release()
+  }
+}
+
+export default pool
+EOF
+
+    # components/ui/button.tsx
+    cat > components/ui/button.tsx << 'EOF'
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -773,8 +834,8 @@ Button.displayName = "Button"
 export { Button, buttonVariants }
 EOF
 
-# Card component
-cat > components/ui/card.tsx << 'EOF'
+    # components/ui/card.tsx
+    cat > components/ui/card.tsx << 'EOF'
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
@@ -855,8 +916,8 @@ CardFooter.displayName = "CardFooter"
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
 EOF
 
-# Theme provider
-cat > components/theme-provider.tsx << 'EOF'
+    # components/theme-provider.tsx
+    cat > components/theme-provider.tsx << 'EOF'
 "use client"
 
 import * as React from "react"
@@ -868,56 +929,211 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
 }
 EOF
 
-# Utility functions
-cat > lib/utils.ts << 'EOF'
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
+    # app/api/health/route.ts
+    cat > app/api/health/route.ts << 'EOF'
+import { NextResponse } from 'next/server'
+import { query } from '@/lib/db'
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
-export function formatCurrency(amount: number, currency: string = 'KES'): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency: currency,
-  }).format(amount)
-}
-
-export function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat('en-KE', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date(date))
-}
-EOF
-
-# Database connection
-cat > lib/db.ts << 'EOF'
-import { Pool } from 'pg'
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-})
-
-export async function query(text: string, params?: any[]) {
-  const client = await pool.connect()
+export async function GET() {
   try {
-    const result = await client.query(text, params)
-    return result
-  } finally {
-    client.release()
+    // Check database connection
+    await query('SELECT 1')
+    
+    return NextResponse.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'connected',
+        application: 'running'
+      }
+    })
+  } catch (error) {
+    return NextResponse.json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: 'Database connection failed'
+    }, { status: 503 })
   }
 }
-
-export default pool
 EOF
 
-# Create comprehensive database initialization
-print_step "Creating database initialization scripts..."
-cat > scripts/001_comprehensive_init.sql << 'EOF'
+    print_success "Essential components created"
+}
+
+# Create customers page
+create_customers_page() {
+    print_step "Creating customers page..."
+    
+    cat > app/customers/page.tsx << 'EOF'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Users, Plus, Search, Filter } from 'lucide-react'
+import Link from "next/link"
+
+export default function CustomersPage() {
+  // This would normally fetch from database
+  const customers = [
+    { id: 1, name: "John Doe", email: "john.doe@email.com", phone: "+254701234567", status: "active", plan: "Standard Home" },
+    { id: 2, name: "Jane Smith", email: "jane.smith@email.com", phone: "+254702345678", status: "active", plan: "Premium Home" },
+    { id: 3, name: "TechCorp Ltd", email: "admin@techcorp.co.ke", phone: "+254707890123", status: "active", plan: "Business Premium" },
+  ]
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Customer Management</h1>
+          <p className="text-muted-foreground">Manage your customers and their services</p>
+        </div>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Customer
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Customers</p>
+                <p className="text-2xl font-bold">1,234</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Active</p>
+                <p className="text-2xl font-bold">1,180</p>
+              </div>
+              <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full bg-green-600"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Suspended</p>
+                <p className="text-2xl font-bold">34</p>
+              </div>
+              <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full bg-yellow-600"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">New This Month</p>
+                <p className="text-2xl font-bold">20</p>
+              </div>
+              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full bg-blue-600"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and Filter */}
+      <Card className="mb-6">
+        <CardContent className="p-6">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search customers..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            <Button variant="outline">
+              <Filter className="h-4 w-4 mr-2" />
+              Filter
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Customers Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Customers</CardTitle>
+          <CardDescription>A list of all customers and their details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-4">Name</th>
+                  <th className="text-left p-4">Email</th>
+                  <th className="text-left p-4">Phone</th>
+                  <th className="text-left p-4">Plan</th>
+                  <th className="text-left p-4">Status</th>
+                  <th className="text-left p-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((customer) => (
+                  <tr key={customer.id} className="border-b hover:bg-muted/50">
+                    <td className="p-4 font-medium">{customer.name}</td>
+                    <td className="p-4 text-muted-foreground">{customer.email}</td>
+                    <td className="p-4 text-muted-foreground">{customer.phone}</td>
+                    <td className="p-4">{customer.plan}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        customer.status === 'active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {customer.status}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm">View</Button>
+                        <Button variant="outline" size="sm">Edit</Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="mt-6 text-center">
+        <Link href="/">
+          <Button variant="outline">Back to Dashboard</Button>
+        </Link>
+      </div>
+    </div>
+  )
+}
+EOF
+
+    print_success "Customers page created"
+}
+
+# Create database initialization script
+create_database_script() {
+    print_step "Creating database initialization script..."
+    
+    cat > scripts/001_comprehensive_init.sql << 'EOF'
 -- ISP Management System - Comprehensive Database Initialization
 -- This script creates the complete database structure for the ISP system
 
@@ -1224,104 +1440,6 @@ SELECT
 FROM customers c
 WHERE RANDOM() < 0.6;  -- 60% of customers have tickets
 
--- Create useful views for dashboard and reporting
-CREATE OR REPLACE VIEW dashboard_stats AS
-SELECT 
-    (SELECT COUNT(*) FROM customers WHERE status = 'active') as active_customers,
-    (SELECT COUNT(*) FROM service_plans WHERE is_active = true) as active_plans,
-    (SELECT AVG(price) FROM service_plans WHERE is_active = true) as average_plan_price,
-    (SELECT SUM(amount) FROM payments WHERE payment_date >= CURRENT_DATE - INTERVAL '30 days') as monthly_revenue,
-    (SELECT COUNT(*) FROM customer_services WHERE status = 'active') as active_services,
-    (SELECT COUNT(*) FROM support_tickets WHERE status IN ('open', 'in_progress')) as open_tickets,
-    (SELECT AVG(uptime_percentage) FROM network_equipment WHERE status = 'active') as average_uptime,
-    CURRENT_TIMESTAMP as last_updated;
-
-CREATE OR REPLACE VIEW customer_summary AS
-SELECT 
-    c.id,
-    c.customer_number,
-    c.name,
-    c.email,
-    c.phone,
-    c.status,
-    c.customer_type,
-    COUNT(cs.id) as active_services,
-    COALESCE(SUM(cs.monthly_fee), 0) as total_monthly_fee,
-    (SELECT SUM(p.amount) FROM payments p WHERE p.customer_id = c.id) as total_payments,
-    (SELECT COUNT(*) FROM support_tickets st WHERE st.customer_id = c.id AND st.status IN ('open', 'in_progress')) as open_tickets
-FROM customers c
-LEFT JOIN customer_services cs ON c.id = cs.customer_id AND cs.status = 'active'
-GROUP BY c.id, c.customer_number, c.name, c.email, c.phone, c.status, c.customer_type;
-
-CREATE OR REPLACE VIEW revenue_summary AS
-SELECT 
-    DATE_TRUNC('month', payment_date) as month,
-    COUNT(*) as payment_count,
-    SUM(amount) as total_revenue,
-    AVG(amount) as average_payment,
-    COUNT(DISTINCT customer_id) as paying_customers
-FROM payments 
-WHERE payment_date >= CURRENT_DATE - INTERVAL '12 months'
-GROUP BY DATE_TRUNC('month', payment_date)
-ORDER BY month DESC;
-
--- Create functions for common operations
-CREATE OR REPLACE FUNCTION generate_customer_number()
-RETURNS TEXT AS $$
-DECLARE
-    new_number TEXT;
-    counter INTEGER;
-BEGIN
-    SELECT COALESCE(MAX(CAST(SUBSTRING(customer_number FROM 6) AS INTEGER)), 0) + 1
-    INTO counter
-    FROM customers
-    WHERE customer_number ~ '^CUST-[0-9]+$';
-    
-    new_number := 'CUST-' || LPAD(counter::TEXT, 3, '0');
-    RETURN new_number;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION generate_ticket_number()
-RETURNS TEXT AS $$
-DECLARE
-    new_number TEXT;
-    counter INTEGER;
-BEGIN
-    SELECT COALESCE(MAX(CAST(SUBSTRING(ticket_number FROM 5) AS INTEGER)), 0) + 1
-    INTO counter
-    FROM support_tickets
-    WHERE ticket_number ~ '^TKT-[0-9]+$';
-    
-    new_number := 'TKT-' || LPAD(counter::TEXT, 6, '0');
-    RETURN new_number;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create triggers for automatic timestamps
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON customers
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_service_plans_updated_at BEFORE UPDATE ON service_plans
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_customer_services_updated_at BEFORE UPDATE ON customer_services
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_network_equipment_updated_at BEFORE UPDATE ON network_equipment
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_support_tickets_updated_at BEFORE UPDATE ON support_tickets
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- Insert system logs
 INSERT INTO system_logs (level, message, context) VALUES 
 ('info', 'Database initialized successfully', '{"component": "database", "action": "initialization"}'),
@@ -1330,9 +1448,15 @@ INSERT INTO system_logs (level, message, context) VALUES
 COMMENT ON DATABASE isp_system IS 'ISP Management System Database - Complete solution for Internet Service Provider management';
 EOF
 
-# Create Docker Compose with all services
-print_step "Creating Docker Compose configuration..."
-cat > docker-compose.yml << EOF
+    print_success "Database initialization script created"
+}
+
+# Create Docker configuration
+create_docker_config() {
+    print_step "Creating Docker configuration..."
+    
+    # Docker Compose
+    cat > docker-compose.yml << EOF
 version: '3.8'
 
 services:
@@ -1452,15 +1576,13 @@ networks:
         - subnet: 172.20.0.0/16
 EOF
 
-# Create optimized Dockerfile
-print_step "Creating optimized Dockerfile..."
-cat > Dockerfile << 'EOF'
+    # Dockerfile
+    cat > Dockerfile << 'EOF'
 # Use Node.js 18 Alpine as base image
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk add --no-cache libc6-compat curl
 WORKDIR /app
 
@@ -1478,8 +1600,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN npm run build
@@ -1489,7 +1609,6 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
-# Uncomment the following line in case you want to disable telemetry during runtime.
 ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
@@ -1505,7 +1624,6 @@ RUN mkdir .next
 RUN chown nextjs:nodejs .next
 
 # Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
@@ -1517,21 +1635,17 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT 3000
-# set hostname to localhost
 ENV HOSTNAME "0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]
 EOF
 
-# Create Nginx configuration
-print_step "Creating Nginx configuration..."
-cat > nginx.conf << 'EOF'
+    # Nginx configuration
+    cat > nginx.conf << 'EOF'
 events {
     worker_connections 1024;
     use epoll;
@@ -1600,7 +1714,6 @@ http {
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         add_header Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; img-src 'self' data: https:; font-src 'self' data:;" always;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
         # Main Application
         location / {
@@ -1664,212 +1777,26 @@ http {
 }
 EOF
 
-# Create health check API endpoint
-print_step "Creating health check API..."
-mkdir -p app/api/health
-cat > app/api/health/route.ts << 'EOF'
-import { NextResponse } from 'next/server'
-import { query } from '@/lib/db'
+    print_success "Docker configuration created"
+}
 
-export async function GET() {
-  try {
-    // Check database connection
-    await query('SELECT 1')
+# Install dependencies
+install_dependencies() {
+    print_step "Installing Node.js dependencies..."
     
-    return NextResponse.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      services: {
-        database: 'connected',
-        application: 'running'
-      }
-    })
-  } catch (error) {
-    return NextResponse.json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: 'Database connection failed'
-    }, { status: 503 })
-  }
+    if command_exists npm; then
+        npm install
+        print_success "Dependencies installed successfully"
+    else
+        print_warning "npm not found, dependencies will be installed in Docker"
+    fi
 }
-EOF
-
-# Create customers page
-print_step "Creating customers management page..."
-cat > app/customers/page.tsx << 'EOF'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Users, Plus, Search, Filter } from 'lucide-react'
-import Link from "next/link"
-
-export default function CustomersPage() {
-  // This would normally fetch from database
-  const customers = [
-    { id: 1, name: "John Doe", email: "john.doe@email.com", phone: "+254701234567", status: "active", plan: "Standard Home" },
-    { id: 2, name: "Jane Smith", email: "jane.smith@email.com", phone: "+254702345678", status: "active", plan: "Premium Home" },
-    { id: 3, name: "TechCorp Ltd", email: "admin@techcorp.co.ke", phone: "+254707890123", status: "active", plan: "Business Premium" },
-  ]
-
-  return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Customer Management</h1>
-          <p className="text-muted-foreground">Manage your customers and their services</p>
-        </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Customer
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Customers</p>
-                <p className="text-2xl font-bold">1,234</p>
-              </div>
-              <Users className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Active</p>
-                <p className="text-2xl font-bold">1,180</p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center">
-                <div className="h-4 w-4 rounded-full bg-green-600"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Suspended</p>
-                <p className="text-2xl font-bold">34</p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center">
-                <div className="h-4 w-4 rounded-full bg-yellow-600"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">New This Month</p>
-                <p className="text-2xl font-bold">20</p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                <div className="h-4 w-4 rounded-full bg-blue-600"></div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filter */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Search customers..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <Button variant="outline">
-              <Filter className="h-4 w-4 mr-2" />
-              Filter
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Customers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Customers</CardTitle>
-          <CardDescription>A list of all customers and their details</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4">Name</th>
-                  <th className="text-left p-4">Email</th>
-                  <th className="text-left p-4">Phone</th>
-                  <th className="text-left p-4">Plan</th>
-                  <th className="text-left p-4">Status</th>
-                  <th className="text-left p-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer) => (
-                  <tr key={customer.id} className="border-b hover:bg-muted/50">
-                    <td className="p-4 font-medium">{customer.name}</td>
-                    <td className="p-4 text-muted-foreground">{customer.email}</td>
-                    <td className="p-4 text-muted-foreground">{customer.phone}</td>
-                    <td className="p-4">{customer.plan}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        customer.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {customer.status}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">View</Button>
-                        <Button variant="outline" size="sm">Edit</Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="mt-6 text-center">
-        <Link href="/">
-          <Button variant="outline">Back to Dashboard</Button>
-        </Link>
-      </div>
-    </div>
-  )
-}
-EOF
-
-# Install dependencies and build
-print_step "Installing dependencies..."
-if command_exists npm; then
-    npm install
-    print_success "Dependencies installed"
-else
-    print_warning "npm not found, dependencies will be installed in Docker"
-fi
 
 # Create startup script
-print_step "Creating startup script..."
-cat > start-system.sh << 'EOF'
+create_startup_script() {
+    print_step "Creating startup script..."
+    
+    cat > start-system.sh << 'EOF'
 #!/bin/bash
 
 # ISP Management System Startup Script
@@ -1896,7 +1823,7 @@ docker compose up -d --build
 
 # Wait for services
 echo -e "${BLUE}⏳ Waiting for services to be ready...${NC}"
-sleep 20
+sleep 30
 
 # Check health
 echo -e "${BLUE}🔍 Checking service health...${NC}"
@@ -1914,7 +1841,6 @@ echo -e "${GREEN}🎉 ISP Management System is running!${NC}"
 echo ""
 echo -e "${BLUE}🌐 Access URLs:${NC}"
 echo "   Main Application: http://localhost:3000"
-echo "   Direct App Access: http://localhost:3000"
 echo "   Health Check: http://localhost:3000/api/health"
 echo ""
 echo -e "${BLUE}📊 Database Access:${NC}"
@@ -1932,39 +1858,73 @@ echo ""
 echo -e "${GREEN}✨ System ready for use!${NC}"
 EOF
 
-chmod +x start-system.sh
+    chmod +x start-system.sh
+    print_success "Startup script created"
+}
 
-# Final success message
-print_header "🎉 COMPLETE INSTALLATION FINISHED!"
-echo ""
-print_success "ISP Management System has been completely installed!"
-echo ""
-print_info "Generated Configuration:"
-echo "NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:0:16}... (64 characters)"
-echo "NEXTAUTH_URL: $NEXTAUTH_URL"
-echo "Public IP detected: $PUBLIC_IP"
-echo ""
-print_info "Installed Components:"
-echo "✅ PostgreSQL 15 Database"
-echo "✅ Next.js 14 Application"
-echo "✅ Redis 7 Cache"
-echo "✅ Nginx Reverse Proxy"
-echo "✅ Complete ISP Management System"
-echo "✅ Sample Data (customers, plans, payments)"
-echo "✅ Health Monitoring"
-echo "✅ Security Headers"
-echo ""
-print_info "🚀 TO START THE SYSTEM:"
-echo "1. Run: ./start-system.sh"
-echo "2. Wait 2-3 minutes for complete startup"
-echo "3. Access: http://localhost:3000"
-echo ""
-print_info "📋 System Features:"
-echo "• Customer Management"
-echo "• Service Plans & Billing"
-echo "• Network Monitoring"
-echo "• Support Tickets"
-echo "• Analytics & Reports"
-echo "• M-Pesa Integration Ready"
-echo ""
-print_success "🎯 Ready to launch your ISP Management System!"
+# Main installation function
+main() {
+    print_header "ISP Management System - Complete Installation"
+    echo ""
+    print_info "This script creates the complete ISP management system"
+    echo ""
+    
+    # Check prerequisites
+    check_prerequisites
+    
+    # Generate secrets
+    generate_secrets
+    
+    # Create project
+    create_project_structure
+    create_environment
+    create_package_json
+    create_nextjs_config
+    create_application_files
+    create_components
+    create_customers_page
+    create_database_script
+    create_docker_config
+    install_dependencies
+    create_startup_script
+    
+    # Final success message
+    echo ""
+    print_header "🎉 COMPLETE INSTALLATION FINISHED!"
+    echo ""
+    print_success "ISP Management System has been completely created!"
+    echo ""
+    print_info "Generated Configuration:"
+    echo "NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:0:16}... (64 characters)"
+    echo "NEXTAUTH_URL: $NEXTAUTH_URL"
+    echo "Public IP detected: $PUBLIC_IP"
+    echo ""
+    print_info "Created Components:"
+    echo "✅ Complete Next.js 14 Application"
+    echo "✅ PostgreSQL 15 Database Schema"
+    echo "✅ Redis 7 Configuration"
+    echo "✅ Nginx Reverse Proxy"
+    echo "✅ Docker Compose Setup"
+    echo "✅ Sample Data & Customers"
+    echo "✅ Health Monitoring"
+    echo "✅ Security Configuration"
+    echo ""
+    print_info "🚀 TO START THE SYSTEM:"
+    echo "1. Run: ./start-system.sh"
+    echo "2. Wait 2-3 minutes for complete startup"
+    echo "3. Access: http://localhost:3000"
+    echo ""
+    print_info "📋 System Features:"
+    echo "• Customer Management Dashboard"
+    echo "• Service Plans & Billing"
+    echo "• Network Equipment Monitoring"
+    echo "• Support Ticket System"
+    echo "• Analytics & Reporting"
+    echo "• M-Pesa Integration Ready"
+    echo "• Real-time Health Monitoring"
+    echo ""
+    print_success "🎯 Ready to launch your ISP Management System!"
+}
+
+# Run main function
+main "$@"

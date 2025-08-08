@@ -1,110 +1,88 @@
--- ISP Management System - Master Setup Script
--- This script runs all database setup scripts in the correct order
+-- Master script to run all database initialization scripts
+-- Run this script to set up the complete ISP management database
 
-\echo 'Starting ISP Management System Database Setup...'
-\echo '================================================='
+\echo 'Starting ISP Management Database Setup...'
 
-\echo ''
-\echo 'Step 1/7: Initializing database with extensions and types...'
+-- Step 1: Initialize database with extensions and basic functions
+\echo 'Step 1: Initializing database...'
 \i scripts/000_initialize_database.sql
-\echo '✓ Database initialization completed'
 
-\echo ''
-\echo 'Step 2/7: Creating core tables...'
+-- Step 2: Create core tables
+\echo 'Step 2: Creating core tables...'
 \i scripts/001_core_tables.sql
-\echo '✓ Core tables created'
 
-\echo ''
-\echo 'Step 3/7: Adding indexes and constraints...'
+-- Step 3: Create indexes and constraints
+\echo 'Step 3: Creating indexes and constraints...'
 \i scripts/002_indexes_and_constraints.sql
-\echo '✓ Indexes and constraints added'
 
-\echo ''
-\echo 'Step 4/7: Creating triggers and functions...'
+-- Step 4: Create triggers and functions
+\echo 'Step 4: Creating triggers and functions...'
 \i scripts/003_triggers_and_functions.sql
-\echo '✓ Triggers and functions created'
 
-\echo ''
-\echo 'Step 5/7: Creating views and reports...'
+-- Step 5: Create views and reports
+\echo 'Step 5: Creating views and reports...'
 \i scripts/004_views_and_reports.sql
-\echo '✓ Views and reports created'
 
-\echo ''
-\echo 'Step 6/7: Inserting sample data...'
+-- Step 6: Insert sample data
+\echo 'Step 6: Inserting sample data...'
 \i scripts/005_sample_data.sql
-\echo '✓ Sample data inserted'
 
-\echo ''
-\echo 'Step 7/7: Setting up maintenance procedures...'
+-- Step 7: Set up maintenance procedures
+\echo 'Step 7: Setting up maintenance procedures...'
 \i scripts/006_maintenance_and_cleanup.sql
-\echo '✓ Maintenance procedures created'
 
-\echo ''
-\echo '================================================='
-\echo 'Database Setup Verification'
-\echo '================================================='
+-- Final verification
+\echo 'Verifying database setup...'
 
--- Verify setup by showing record counts
-\echo ''
-\echo 'Record counts:'
-SELECT 'Customers' as table_name, COUNT(*) as records FROM customers
+-- Check table counts
+SELECT 
+    'customers' as table_name, 
+    COUNT(*) as record_count 
+FROM customers
 UNION ALL
-SELECT 'Service Plans', COUNT(*) FROM service_plans
+SELECT 
+    'service_plans' as table_name, 
+    COUNT(*) as record_count 
+FROM service_plans
 UNION ALL
-SELECT 'Customer Services', COUNT(*) FROM customer_services
+SELECT 
+    'customer_services' as table_name, 
+    COUNT(*) as record_count 
+FROM customer_services
 UNION ALL
-SELECT 'Network Routers', COUNT(*) FROM network_routers
+SELECT 
+    'payments' as table_name, 
+    COUNT(*) as record_count 
+FROM payments
 UNION ALL
-SELECT 'Equipment Inventory', COUNT(*) FROM equipment_inventory
+SELECT 
+    'invoices' as table_name, 
+    COUNT(*) as record_count 
+FROM invoices
 UNION ALL
-SELECT 'Payments', COUNT(*) FROM payments
+SELECT 
+    'network_routers' as table_name, 
+    COUNT(*) as record_count 
+FROM network_routers
 UNION ALL
-SELECT 'Invoices', COUNT(*) FROM invoices
-UNION ALL
-SELECT 'Support Tickets', COUNT(*) FROM support_tickets
-UNION ALL
-SELECT 'IP Addresses', COUNT(*) FROM ip_addresses
-ORDER BY table_name;
+SELECT 
+    'customer_routers' as table_name, 
+    COUNT(*) as record_count 
+FROM customer_routers;
 
-\echo ''
-\echo 'Financial Summary:'
+-- Test key functions
+SELECT 'Testing customer search...' as test;
+SELECT * FROM search_customers('john') LIMIT 3;
+
+SELECT 'Testing financial dashboard...' as test;
 SELECT * FROM financial_dashboard;
 
-\echo ''
-\echo 'Testing key functions:'
--- Test customer search function
-SELECT 'Customer Search Test' as test_name, COUNT(*) as results 
-FROM search_customers('John');
+SELECT 'Testing invoice generation...' as test;
+SELECT generate_monthly_invoices() as invoices_generated;
 
--- Test balance calculation
-SELECT 'Balance Calculation Test' as test_name, 
-       CASE WHEN calculate_customer_balance((SELECT id FROM customers LIMIT 1)) IS NOT NULL 
-            THEN 'PASSED' ELSE 'FAILED' END as result;
-
--- Test database health check
+\echo 'Database setup completed successfully!'
+\echo 'You can now run the ISP management application.'
 \echo ''
-\echo 'Database Health Check:'
-SELECT * FROM check_database_health();
-
-\echo ''
-\echo '================================================='
-\echo '🎉 ISP Management System Database Setup Complete!'
-\echo '================================================='
-\echo ''
-\echo 'Your database is now ready with:'
-\echo '• Complete table structure with proper relationships'
-\echo '• Performance-optimized indexes and constraints'
-\echo '• Business logic functions and triggers'
-\echo '• Comprehensive reporting views'
-\echo '• Sample data for testing (8 customers, 8 service plans, etc.)'
-\echo '• Automated maintenance procedures'
-\echo ''
-\echo 'Next steps:'
-\echo '1. Start your Next.js application'
-\echo '2. Configure your environment variables'
-\echo '3. Access the web interface at http://localhost:3000'
-\echo ''
-\echo 'For ongoing maintenance, run: SELECT run_maintenance();'
-\echo 'For database health checks, run: SELECT * FROM check_database_health();'
-\echo ''
-\echo 'Happy managing! 🚀'
+\echo 'To perform regular maintenance, run: SELECT perform_database_maintenance();'
+\echo 'To clean up old logs, run: SELECT cleanup_old_logs(90);'
+\echo 'To refresh materialized views, run: SELECT refresh_materialized_views();'

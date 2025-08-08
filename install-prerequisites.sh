@@ -254,17 +254,16 @@ install_nodejs() {
         if command_exists dnf; then
             sudo dnf remove -y nodejs npm 2>/dev/null || true
             curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-            sudo dnf install -y nodejs
+            sudo dnf install -y nodejs npm
         else
             sudo yum remove -y nodejs npm 2>/dev/null || true
             curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-            sudo yum install -y nodejs
+            sudo yum install -y nodejs npm
         fi
         
     elif [[ "$OS" == "macOS" ]]; then
         if command_exists brew; then
-            brew install node@18
-            brew link --overwrite node@18 --force
+            brew install node
         else
             print_error "Homebrew not found. Please install Node.js 18 manually from https://nodejs.org"
             exit 1

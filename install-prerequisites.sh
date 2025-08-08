@@ -89,213 +89,219 @@ update_system() {
 
 # Install Docker
 install_docker() {
-    if command_exists docker; then
-        DOCKER_VERSION=$(docker --version | cut -d' ' -f3 | cut -d',' -f1)
-        print_success "✅ Docker already installed (version $DOCKER_VERSION)"
-        
-        # Check if Docker is running
-        if ! docker info >/dev/null 2>&1; then
-            print_step "Starting Docker service..."
-            if [[ "$OS" == "macos" ]]; then
-                print_warning "Please start Docker Desktop manually"
-                read -p "Press Enter after Docker Desktop is running..."
-            else
-                sudo systemctl start docker
-                sudo systemctl enable docker
-            fi
-        fi
-        return
-    fi
-
-    print_step "Installing Docker..."
+    echo -e "${BLUE}🐳 Installing Docker...${NC}"
     
-    if [[ "$OS" == "linux" ]]; then
-        if [[ "$DISTRO" == "debian" ]]; then
-            # Ubuntu/Debian
+    OS=$(detect_os)
+    
+    if command_exists docker; then
+        echo -e "${GREEN}✅ Docker is already installed${NC}"
+        return 0
+    fi
+    
+    case $OS in
+        "debian")
+            # Update package index
             sudo apt-get update
-            sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            
+            # Install required packages
+            sudo apt-get install -y \
+                ca-certificates \
+                curl \
+                gnupg \
+                lsb-release
+            
+            # Add Docker's official GPG key
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            
+            # Set up repository
+            echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+            
+            # Install Docker Engine
             sudo apt-get update
             sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-        elif [[ "$DISTRO" == "redhat" ]]; then
-            # CentOS/RHEL/Fedora
+            ;;
+        "redhat")
             sudo yum install -y yum-utils
             sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
             sudo yum install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-        fi
-        
-        # Start Docker service
-        sudo systemctl start docker
-        sudo systemctl enable docker
-        sudo usermod -aG docker $USER
-        
-    elif [[ "$OS" == "macos" ]]; then
-        if command_exists brew; then
-            brew install --cask docker
-        else
-            print_error "❌ Please install Homebrew first or download Docker Desktop manually"
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            ;;
+        "macos")
+            echo -e "${YELLOW}⚠️  Please install Docker Desktop for Mac from: https://docs.docker.com/desktop/mac/install/${NC}"
+            echo -e "${YELLOW}⚠️  After installation, restart this script${NC}"
             exit 1
-        fi
-    fi
+            ;;
+        *)
+            echo -e "${RED}❌ Unsupported operating system${NC}"
+            exit 1
+            ;;
+    esac
     
-    print_success "✅ Docker installed successfully"
-}
-
-# Install Docker Compose
-install_docker_compose() {
-    if command_exists docker-compose || docker compose version >/dev/null 2>&1; then
-        COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || docker-compose --version | cut -d' ' -f3 | cut -d',' -f1)
-        print_success "✅ Docker Compose already available (version $COMPOSE_VERSION)"
-        return
-    fi
-
-    print_step "Installing Docker Compose..."
+    # Add current user to docker group
+    sudo usermod -aG docker $USER
     
-    if [[ "$OS" == "linux" ]]; then
-        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
-    fi
-    
-    print_success "✅ Docker Compose installed successfully"
+    echo -e "${GREEN}✅ Docker installed successfully${NC}"
+    echo -e "${YELLOW}⚠️  You may need to log out and back in for Docker permissions to take effect${NC}"
 }
 
 # Install Node.js
 install_nodejs() {
+    echo -e "${BLUE}📦 Installing Node.js...${NC}"
+    
     if command_exists node; then
-        NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-        if [ "$NODE_VERSION" -ge 18 ]; then
-            print_success "✅ Node.js $NODE_VERSION already installed"
-            return
-        else
-            print_warning "Node.js version $NODE_VERSION is too old, upgrading to Node.js 18..."
-        fi
-    fi
-
-    print_step "Installing Node.js 18..."
-    
-    if [[ "$OS" == "linux" ]]; then
-        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-        if [[ "$DISTRO" == "debian" ]]; then
-            sudo apt-get install -y nodejs
-        elif [[ "$DISTRO" == "redhat" ]]; then
-            sudo yum install -y nodejs npm
-        fi
-    elif [[ "$OS" == "macos" ]]; then
-        if command_exists brew; then
-            brew install node
-        else
-            print_error "❌ Please install Homebrew first"
-            exit 1
-        fi
+        NODE_VERSION=$(node --version)
+        echo -e "${GREEN}✅ Node.js is already installed: $NODE_VERSION${NC}"
+        return 0
     fi
     
-    print_success "✅ Node.js installed successfully"
+    # Install Node.js using NodeSource repository
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+    
+    echo -e "${GREEN}✅ Node.js installed successfully${NC}"
+    node --version
+    npm --version
 }
 
 # Install Git
 install_git() {
-    if command_exists git; then
-        GIT_VERSION=$(git --version | cut -d' ' -f3)
-        print_success "✅ Git already installed (version $GIT_VERSION)"
-        return
-    fi
-
-    print_step "Installing Git..."
+    echo -e "${BLUE}📝 Installing Git...${NC}"
     
-    if [[ "$OS" == "linux" ]]; then
-        if [[ "$DISTRO" == "debian" ]]; then
+    if command_exists git; then
+        echo -e "${GREEN}✅ Git is already installed${NC}"
+        return 0
+    fi
+    
+    OS=$(detect_os)
+    
+    case $OS in
+        "debian")
             sudo apt-get update
             sudo apt-get install -y git
-        elif [[ "$DISTRO" == "redhat" ]]; then
+            ;;
+        "redhat")
             sudo yum install -y git
-        fi
-    elif [[ "$OS" == "macos" ]]; then
-        if command_exists brew; then
-            brew install git
-        else
+            ;;
+        "macos")
             # Git comes with Xcode command line tools
-            xcode-select --install
-        fi
-    fi
+            xcode-select --install 2>/dev/null || true
+            ;;
+    esac
     
-    print_success "✅ Git installed successfully"
+    echo -e "${GREEN}✅ Git installed successfully${NC}"
 }
 
 # Install additional tools
 install_tools() {
-    print_step "Installing additional tools..."
+    echo -e "${BLUE}🛠️  Installing additional tools...${NC}"
     
-    if [[ "$OS" == "linux" ]]; then
-        if [[ "$DISTRO" == "debian" ]]; then
-            sudo apt-get install -y curl wget unzip zip jq htop net-tools postgresql-client
-        elif [[ "$DISTRO" == "redhat" ]]; then
-            if command_exists dnf; then
-                sudo dnf install -y curl wget unzip zip jq htop net-tools postgresql
-            else
-                sudo yum install -y curl wget unzip zip jq htop net-tools postgresql
+    OS=$(detect_os)
+    
+    case $OS in
+        "debian")
+            sudo apt-get update
+            sudo apt-get install -y \
+                curl \
+                wget \
+                unzip \
+                vim \
+                htop \
+                net-tools \
+                netstat-nat
+            ;;
+        "redhat")
+            sudo yum install -y \
+                curl \
+                wget \
+                unzip \
+                vim \
+                htop \
+                net-tools
+            ;;
+        "macos")
+            # Install Homebrew if not present
+            if ! command_exists brew; then
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
-        fi
-    elif [[ "$OS" == "macos" ]]; then
-        if command_exists brew; then
-            brew install curl wget jq htop postgresql
-        fi
+            
+            brew install curl wget unzip vim htop
+            ;;
+    esac
+    
+    echo -e "${GREEN}✅ Additional tools installed successfully${NC}"
+}
+
+# Check system requirements
+check_requirements() {
+    echo -e "${BLUE}🔍 Checking system requirements...${NC}"
+    
+    # Check available memory (minimum 2GB recommended)
+    MEMORY_KB=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "0")
+    MEMORY_GB=$((MEMORY_KB / 1024 / 1024))
+    
+    if [ $MEMORY_GB -lt 2 ]; then
+        echo -e "${YELLOW}⚠️  Warning: Less than 2GB RAM detected. System may run slowly.${NC}"
+    else
+        echo -e "${GREEN}✅ Memory: ${MEMORY_GB}GB${NC}"
     fi
     
-    print_success "✅ Additional tools installed"
+    # Check available disk space (minimum 5GB recommended)
+    DISK_SPACE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//' || echo "0")
+    
+    if [ $DISK_SPACE -lt 5 ]; then
+        echo -e "${YELLOW}⚠️  Warning: Less than 5GB disk space available.${NC}"
+    else
+        echo -e "${GREEN}✅ Disk Space: ${DISK_SPACE}GB available${NC}"
+    fi
 }
 
 # Main installation function
 main() {
-    print_header "ISP Management System - Prerequisites Installation"
-    echo ""
-    print_info "This script will install all required prerequisites:"
-    echo "  • Docker & Docker Compose"
-    echo "  • Node.js 18+ & npm"
-    echo "  • Git"
-    echo "  • System utilities"
+    echo -e "${BLUE}🎯 Starting prerequisites installation...${NC}"
     echo ""
     
     # Check if running as root
     if [ "$EUID" -eq 0 ]; then
-        print_error "Please do not run this script as root"
-        print_info "The script will ask for sudo permissions when needed"
+        echo -e "${RED}❌ Please do not run this script as root${NC}"
+        echo -e "${YELLOW}💡 Run as regular user: ./install-prerequisites.sh${NC}"
         exit 1
     fi
     
-    # Check for sudo access
-    if ! sudo -n true 2>/dev/null; then
-        print_info "This script requires sudo access for system package installation"
-        sudo -v
-    fi
-    
-    # Detect OS
-    detect_os
-    
-    # Install prerequisites
-    update_system
-    install_docker
-    install_docker_compose
-    install_nodejs
-    install_git
-    install_tools
-    
+    check_requirements
     echo ""
-    echo -e "${GREEN}🎉 All prerequisites installed successfully!${NC}"
+    
+    install_git
+    echo ""
+    
+    install_nodejs
+    echo ""
+    
+    install_docker
+    echo ""
+    
+    install_tools
+    echo ""
+    
+    echo -e "${GREEN}🎉 Prerequisites installation completed successfully!${NC}"
     echo ""
     echo -e "${BLUE}📋 Installed components:${NC}"
-    echo "   ✅ Git: $(git --version 2>/dev/null || echo 'Not found')"
-    echo "   ✅ Node.js: $(node --version 2>/dev/null || echo 'Not found')"
-    echo "   ✅ Docker: $(docker --version 2>/dev/null || echo 'Not found')"
-    echo "   ✅ Docker Compose: $(docker-compose --version 2>/dev/null || docker compose version 2>/dev/null || echo 'Not found')"
+    echo "   ✅ Docker & Docker Compose"
+    echo "   ✅ Node.js & npm"
+    echo "   ✅ Git"
+    echo "   ✅ Additional system tools"
     echo ""
-    
-    if [[ "$OS" == "linux" ]]; then
-        echo -e "${YELLOW}⚠️  You may need to log out and back in for Docker permissions to take effect${NC}"
-        echo -e "${YELLOW}   Or run: newgrp docker${NC}"
-    fi
-    
-    echo -e "${GREEN}✨ Ready to install ISP Management System!${NC}"
+    echo -e "${BLUE}🚀 Next steps:${NC}"
+    echo "   1. Log out and back in (for Docker permissions)"
+    echo "   2. Run: ./complete-system-install.sh"
+    echo ""
+    echo -e "${YELLOW}⚠️  If you encounter permission issues with Docker, run:${NC}"
+    echo "   sudo systemctl restart docker"
+    echo "   newgrp docker"
+    echo ""
 }
 
 # Run main function

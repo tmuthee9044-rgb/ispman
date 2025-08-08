@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ISP Management System - One Command Complete Installation
-# This master script runs both prerequisite installation and system creation
+# This script installs prerequisites and creates the complete ISP system
 
 set -e
 
@@ -40,17 +40,15 @@ print_info() {
     echo -e "${CYAN}[INFO]${NC} $1"
 }
 
-# Main function
+# Main installation function
 main() {
     print_header "🚀 ISP Management System - One Command Installation"
     echo ""
-    print_info "This will install ALL prerequisites and create a complete ISP management system"
-    echo ""
-    print_info "What will be installed:"
-    echo "  📦 Prerequisites: Docker, Node.js, Git, System utilities"
-    echo "  🏗️  Complete ISP System: Next.js app, PostgreSQL, Redis, Nginx"
-    echo "  📊 Sample Data: Customers, plans, payments, equipment"
-    echo "  🔧 Management Tools: Health monitoring, logging, backups"
+    print_info "This script will:"
+    echo "1. Install all system prerequisites (Docker, Node.js, Git, etc.)"
+    echo "2. Create the complete ISP management system"
+    echo "3. Set up all services and configurations"
+    echo "4. Provide you with a ready-to-use system"
     echo ""
     
     # Check if running as root
@@ -60,15 +58,13 @@ main() {
         exit 1
     fi
     
-    read -p "Do you want to continue? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_info "Installation cancelled"
-        exit 0
+    # Check for sudo access
+    if ! sudo -n true 2>/dev/null; then
+        print_info "This script requires sudo access for system package installation"
+        sudo -v
     fi
     
-    echo ""
-    print_step "Starting complete installation process..."
+    print_info "Starting complete installation process..."
     echo ""
     
     # Step 1: Install Prerequisites
@@ -78,6 +74,7 @@ main() {
         ./install-prerequisites.sh
     else
         print_error "install-prerequisites.sh not found!"
+        print_info "Please ensure all installation scripts are in the current directory"
         exit 1
     fi
     
@@ -85,52 +82,65 @@ main() {
     print_success "Prerequisites installation completed!"
     echo ""
     
-    # Step 2: Create ISP System
+    # Step 2: Create Complete System
     print_header "STEP 2: Creating ISP Management System"
     if [ -f "./complete-system-install.sh" ]; then
         chmod +x ./complete-system-install.sh
         ./complete-system-install.sh
     else
         print_error "complete-system-install.sh not found!"
+        print_info "Please ensure all installation scripts are in the current directory"
         exit 1
     fi
     
     echo ""
-    print_success "ISP System creation completed!"
+    print_success "System creation completed!"
     echo ""
     
-    # Final instructions
-    print_header "🎉 INSTALLATION COMPLETE!"
+    # Final success message
+    print_header "🎉 COMPLETE INSTALLATION FINISHED!"
     echo ""
-    print_success "Your ISP Management System is ready!"
+    print_success "🎯 ISP Management System is ready!"
     echo ""
-    print_info "🚀 NEXT STEPS:"
-    echo "1. Start the system: ./start-system.sh"
-    echo "2. Wait 2-3 minutes for all services to start"
-    echo "3. Open your browser: http://localhost:3000"
+    print_info "🚀 TO START THE SYSTEM:"
+    echo "   ./start-system.sh"
     echo ""
-    print_info "📋 WHAT'S INCLUDED:"
-    echo "• Complete ISP management dashboard"
-    echo "• Customer management with 10 sample customers"
-    echo "• 8 service plans (KES 1,200 - KES 35,000)"
-    echo "• Payment tracking with M-Pesa integration"
-    echo "• Network equipment monitoring"
-    echo "• Support ticket system"
-    echo "• Real-time analytics and reporting"
+    print_info "🌐 SYSTEM ACCESS:"
+    echo "   Main Application: http://localhost:3000"
+    echo "   Health Check: http://localhost:3000/api/health"
+    echo ""
+    print_info "📊 DATABASE ACCESS:"
+    echo "   Host: localhost:5432"
+    echo "   Database: isp_system"
+    echo "   Username: isp_user"
+    echo "   Password: isp_password_2024"
     echo ""
     print_info "🛠️  MANAGEMENT COMMANDS:"
-    echo "• Start system: ./start-system.sh"
-    echo "• View logs: docker compose logs -f"
-    echo "• Stop system: docker compose down"
-    echo "• System status: docker compose ps"
+    echo "   View logs: docker compose logs -f"
+    echo "   Stop system: docker compose down"
+    echo "   Restart: docker compose restart"
+    echo "   View status: docker compose ps"
     echo ""
-    print_info "📞 SUPPORT:"
-    echo "• Database: PostgreSQL 15 on localhost:5432"
-    echo "• Cache: Redis 7 on localhost:6379"
-    echo "• Web: Nginx proxy on localhost:80"
-    echo "• App: Next.js on localhost:3000"
+    print_info "📋 SYSTEM FEATURES:"
+    echo "   ✅ Customer Management Dashboard"
+    echo "   ✅ Service Plans & Billing System"
+    echo "   ✅ Network Equipment Monitoring"
+    echo "   ✅ Support Ticket Management"
+    echo "   ✅ Analytics & Reporting"
+    echo "   ✅ M-Pesa Integration Ready"
+    echo "   ✅ Real-time Health Monitoring"
+    echo "   ✅ 50+ Sample Customers"
+    echo "   ✅ 8 Service Plans (KES 1,200 - KES 35,000)"
     echo ""
-    print_success "🎯 Ready to manage your ISP business!"
+    print_success "🎊 Installation Complete! Your ISP system is ready to use!"
+    echo ""
+    print_warning "💡 NEXT STEPS:"
+    echo "1. Run: ./start-system.sh"
+    echo "2. Wait 2-3 minutes for all services to start"
+    echo "3. Open: http://localhost:3000"
+    echo "4. Explore the dashboard and features"
+    echo ""
+    print_info "📚 For support and documentation, check the README.md file"
 }
 
 # Run main function

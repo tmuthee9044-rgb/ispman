@@ -1,7 +1,18 @@
 #!/bin/bash
 
 # ISP Management System - One Command Installation
+# This script runs the complete installation process
+
 set -e
+
+echo "🚀 ISP Management System - One Command Installation"
+echo "=================================================="
+echo ""
+echo "This script will:"
+echo "1. Install all prerequisites (Docker, Node.js, Git)"
+echo "2. Create and configure the ISP management system"
+echo "3. Start all services"
+echo ""
 
 # Colors for output
 RED='\033[0;31m'
@@ -10,107 +21,96 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 ISP Management System - One Command Installation${NC}"
-echo -e "${BLUE}=================================================${NC}"
-echo ""
-
-# Function to check if script exists and is executable
-check_script() {
-    local script_name=$1
-    if [ ! -f "$script_name" ]; then
-        echo -e "${RED}❌ Script $script_name not found${NC}"
-        return 1
-    fi
-    
-    if [ ! -x "$script_name" ]; then
-        echo -e "${YELLOW}⚠️  Making $script_name executable...${NC}"
-        chmod +x "$script_name"
-    fi
-    
-    return 0
+print_status() {
+    echo -e "${GREEN}[INFO]${NC} $1"
 }
 
-# Main installation process
-main() {
-    echo -e "${BLUE}🎯 Starting automated installation process...${NC}"
-    echo ""
-    
-    # Step 1: Install Prerequisites
-    echo -e "${BLUE}📋 Step 1: Installing Prerequisites${NC}"
-    echo -e "${BLUE}=================================${NC}"
-    
-    if check_script "install-prerequisites.sh"; then
-        ./install-prerequisites.sh
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}❌ Prerequisites installation failed${NC}"
-            exit 1
-        fi
-    else
-        echo -e "${RED}❌ install-prerequisites.sh not found${NC}"
-        exit 1
-    fi
-    
-    echo ""
-    echo -e "${GREEN}✅ Prerequisites installation completed${NC}"
-    echo ""
-    
-    # Step 2: Install Complete System
-    echo -e "${BLUE}🏗️  Step 2: Installing Complete System${NC}"
-    echo -e "${BLUE}====================================${NC}"
-    
-    if check_script "complete-system-install.sh"; then
-        ./complete-system-install.sh
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}❌ System installation failed${NC}"
-            exit 1
-        fi
-    else
-        echo -e "${RED}❌ complete-system-install.sh not found${NC}"
-        exit 1
-    fi
-    
-    echo ""
-    echo -e "${GREEN}✅ System installation completed${NC}"
-    echo ""
-    
-    # Final success message
-    echo -e "${GREEN}🎉 ISP Management System Installation Completed Successfully!${NC}"
-    echo -e "${GREEN}============================================================${NC}"
-    echo ""
-    echo -e "${BLUE}🌐 Your system is now available at:${NC}"
-    echo "   http://localhost:3000"
-    echo "   http://localhost (via Nginx)"
-    echo ""
-    echo -e "${BLUE}📋 Default Login Credentials:${NC}"
-    echo "   Username: admin@yourisp.com"
-    echo "   Password: admin123"
-    echo ""
-    echo -e "${BLUE}🛠️  Useful Commands:${NC}"
-    echo "   ./start-system.sh         # Start the system"
-    echo "   docker compose down       # Stop the system"
-    echo "   docker compose logs -f    # View system logs"
-    echo "   ./troubleshoot.sh         # Troubleshoot issues"
-    echo ""
-    echo -e "${BLUE}📁 Important Files:${NC}"
-    echo "   .env.local               # Environment configuration"
-    echo "   docker-compose.yml       # Docker services configuration"
-    echo "   scripts/                 # Database initialization scripts"
-    echo ""
-    echo -e "${YELLOW}⚠️  Security Reminders:${NC}"
-    echo "   1. Change default passwords immediately"
-    echo "   2. Update .env.local with your SMTP settings"
-    echo "   3. Configure SSL certificates for production"
-    echo "   4. Set up regular database backups"
-    echo ""
-    echo -e "${GREEN}🚀 Your ISP Management System is ready to use!${NC}"
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    echo -e "${RED}❌ Please do not run this script as root${NC}"
-    echo -e "${YELLOW}💡 Run as regular user: ./one-command-install.sh${NC}"
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_header() {
+    echo -e "${BLUE}[PHASE]${NC} $1"
+}
+
+# Check if scripts exist
+if [ ! -f "install-prerequisites.sh" ]; then
+    print_error "install-prerequisites.sh not found!"
     exit 1
 fi
 
-# Run main installation
-main "$@"
+if [ ! -f "complete-system-install.sh" ]; then
+    print_error "complete-system-install.sh not found!"
+    exit 1
+fi
+
+# Make scripts executable
+chmod +x install-prerequisites.sh
+chmod +x complete-system-install.sh
+
+# Phase 1: Install Prerequisites
+print_header "Phase 1: Installing Prerequisites"
+echo "=================================="
+./install-prerequisites.sh
+
+# Check if we need to restart for Docker group changes
+if [[ "$OSTYPE" == "linux-gnu"* ]] && ! groups $USER | grep -q docker; then
+    print_warning "Docker group changes detected. You may need to:"
+    print_warning "1. Log out and back in, OR"
+    print_warning "2. Run: newgrp docker"
+    print_warning "3. Then re-run this script"
+    echo ""
+    read -p "Do you want to continue anyway? (y/N): " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_status "Installation paused. Please restart your session and re-run this script."
+        exit 0
+    fi
+fi
+
+echo ""
+print_header "Phase 2: Installing ISP Management System"
+echo "=========================================="
+./complete-system-install.sh
+
+echo ""
+echo "🎉 INSTALLATION COMPLETE!"
+echo "========================"
+echo ""
+echo "Your ISP Management System is now running!"
+echo ""
+echo "🌐 Access your system at: http://localhost:3000"
+echo ""
+echo "📋 Quick Start:"
+echo "   1. Open http://localhost:3000 in your browser"
+echo "   2. Login with: admin@yourisp.com / admin123"
+echo "   3. Change the default password"
+echo "   4. Start managing your ISP business!"
+echo ""
+echo "🛠️ Useful Commands:"
+echo "   • Check status:    ./status.sh"
+echo "   • View logs:       docker compose logs -f"
+echo "   • Stop system:     docker compose down"
+echo "   • Start system:    docker compose up -d"
+echo "   • Troubleshoot:    ./troubleshoot.sh"
+echo ""
+echo "📚 Need help? Check QUICK_START.md for detailed instructions."
+echo ""
+
+# Final health check
+print_status "Performing final health check..."
+sleep 5
+
+if curl -f http://localhost:3000 > /dev/null 2>&1; then
+    echo "✅ System is healthy and ready to use!"
+else
+    echo "⚠️  System may still be starting up. Please wait a few more minutes."
+    echo "   Run './troubleshoot.sh' if issues persist."
+fi
+
+echo ""
+echo "🚀 Happy ISP Management! 🚀"

@@ -1,89 +1,78 @@
 #!/bin/bash
 
 # ISP Management System - One Command Installation
-# This script installs everything needed for the ISP management system
-
 set -e
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo -e "${BLUE}🚀 ISP Management System - Complete Installation${NC}"
-echo "================================================="
+echo -e "${BLUE}🚀 ISP Management System - One Command Installation${NC}"
+echo -e "${BLUE}===================================================${NC}"
 echo ""
-echo "This script will:"
-echo "1. Install all prerequisites (Docker, Node.js, Git)"
-echo "2. Create the complete ISP management system"
-echo "3. Start all services"
-echo ""
-
-# Ask for confirmation
-read -p "Do you want to continue? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Installation cancelled."
-    exit 1
-fi
-
-echo ""
-echo -e "${BLUE}📋 Step 1: Installing Prerequisites${NC}"
-echo "=================================="
-
-# Check if prerequisites script exists
-if [ ! -f "install-prerequisites.sh" ]; then
-    echo -e "${RED}❌ install-prerequisites.sh not found in current directory${NC}"
-    echo "Please make sure you're in the correct directory with all installation scripts."
-    exit 1
-fi
 
 # Make scripts executable
 chmod +x install-prerequisites.sh
 chmod +x complete-system-install.sh
+chmod +x troubleshoot.sh
+chmod +x start-system.sh
 
-# Run prerequisites installation
-echo -e "${BLUE}🔧 Installing system prerequisites...${NC}"
+echo -e "${BLUE}📋 Installation Steps:${NC}"
+echo "   1. Install prerequisites (Docker, Node.js, etc.)"
+echo "   2. Install ISP Management System"
+echo "   3. Start all services"
+echo "   4. Run health checks"
+echo ""
+
+read -p "Press Enter to continue with installation..."
+
+# Step 1: Install prerequisites
+echo -e "${BLUE}🔧 Step 1: Installing prerequisites...${NC}"
 ./install-prerequisites.sh
 
 echo ""
-echo -e "${BLUE}📋 Step 2: Installing ISP Management System${NC}"
-echo "=========================================="
+echo -e "${GREEN}✅ Prerequisites installation completed!${NC}"
+echo ""
 
-# Run complete system installation
-echo -e "${BLUE}🏗️  Creating ISP management system...${NC}"
+# Step 2: Install ISP system
+echo -e "${BLUE}🏗️  Step 2: Installing ISP Management System...${NC}"
 ./complete-system-install.sh
 
 echo ""
-echo -e "${BLUE}📋 Step 3: Starting the System${NC}"
-echo "=============================="
+echo -e "${GREEN}✅ ISP Management System installation completed!${NC}"
+echo ""
 
-# Navigate to the created directory
-cd isp-management-system
-
-# Start the system
-echo -e "${BLUE}🚀 Starting all services...${NC}"
-./start-system.sh
+# Step 3: Final health check and troubleshooting
+echo -e "${BLUE}🔍 Step 3: Running final health checks...${NC}"
+sleep 5
+./troubleshoot.sh
 
 echo ""
-echo -e "${GREEN}🎉 Installation Complete!${NC}"
+echo -e "${GREEN}🎉 INSTALLATION COMPLETED SUCCESSFULLY!${NC}"
+echo -e "${GREEN}=======================================${NC}"
 echo ""
-echo -e "${BLUE}📍 System Information:${NC}"
-echo "   • Location: $(pwd)"
-echo "   • Web Interface: http://localhost:3000"
-echo "   • Health Check: http://localhost:3000/api/health"
+echo -e "${BLUE}🌐 Your ISP Management System is now running at:${NC}"
+echo ""
+echo -e "${GREEN}   ➤ Main Application: http://localhost:3000${NC}"
+echo -e "${GREEN}   ➤ Admin Portal: http://localhost:3000/admin${NC}"
+echo -e "${GREEN}   ➤ Customer Portal: http://localhost:3000/portal${NC}"
+echo ""
+echo -e "${BLUE}🔑 Default Login Credentials:${NC}"
+echo "   Username: admin@isp.local"
+echo "   Password: admin123"
 echo ""
 echo -e "${BLUE}🛠️  Management Commands:${NC}"
-echo "   • Start system: ./start-system.sh"
-echo "   • Troubleshoot: ./troubleshoot.sh"
-echo "   • View logs: docker compose logs -f"
-echo "   • Stop system: docker compose down"
+echo "   Start system: ./start-system.sh"
+echo "   Stop system: docker compose down"
+echo "   View logs: docker compose logs -f"
+echo "   Troubleshoot: ./troubleshoot.sh"
 echo ""
-echo -e "${YELLOW}⚠️  Important Notes:${NC}"
-echo "1. Use HTTP (not HTTPS): http://localhost:3000"
-echo "2. If you can't connect, run: ./troubleshoot.sh"
-echo "3. The system may take 2-3 minutes to fully start"
+echo -e "${YELLOW}💡 If you can't access the web interface:${NC}"
+echo "   1. Wait 2-3 minutes for all services to fully start"
+echo "   2. Try http://localhost:3000 (not https://)"
+echo "   3. Run ./troubleshoot.sh for detailed diagnostics"
 echo ""
-echo -e "${GREEN}🎊 Enjoy your ISP Management System!${NC}"
+echo -e "${GREEN}✨ Enjoy your ISP Management System!${NC}"

@@ -1,240 +1,172 @@
-"use client"
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Users, DollarSign, Activity, AlertTriangle, TrendingUp, TrendingDown, Wifi, Server, Clock, CheckCircle, XCircle, Bell } from 'lucide-react'
+import { Users, Wifi, CreditCard, Settings, BarChart3, Headphones } from 'lucide-react'
+import Link from "next/link"
 
-export default function DashboardPage() {
-  // Mock data for dashboard
-  const stats = {
-    totalCustomers: 2847,
-    monthlyRevenue: 45231,
-    networkUptime: 99.8,
-    activeIssues: 3
-  }
-
-  const recentActivity = [
+export default function HomePage() {
+  const features = [
     {
-      id: 1,
-      type: "customer",
-      message: "New customer registered",
-      details: "John Doe - Premium Plan",
-      time: "2m ago",
+      title: "Customer Management",
+      description: "Manage customer accounts, services, and billing",
       icon: Users,
-      color: "text-green-600"
-    },
-    {
-      id: 2,
-      type: "payment",
-      message: "Payment received",
-      details: "Invoice #1234 - $89.99",
-      time: "5m ago",
-      icon: DollarSign,
+      href: "/customers",
       color: "text-blue-600"
     },
     {
-      id: 3,
-      type: "maintenance",
-      message: "Router maintenance",
-      details: "Router-001 scheduled maintenance",
-      time: "15m ago",
-      icon: Server,
-      color: "text-yellow-600"
+      title: "Network Monitoring",
+      description: "Monitor network performance and equipment",
+      icon: Wifi,
+      href: "/network",
+      color: "text-green-600"
     },
     {
-      id: 4,
-      type: "support",
-      message: "Support ticket opened",
-      details: "Connection issue - High priority",
-      time: "1h ago",
-      icon: AlertTriangle,
+      title: "Billing & Payments",
+      description: "Automated billing with M-Pesa integration",
+      icon: CreditCard,
+      href: "/billing",
+      color: "text-purple-600"
+    },
+    {
+      title: "Support System",
+      description: "Ticket management and customer support",
+      icon: Headphones,
+      href: "/support",
+      color: "text-orange-600"
+    },
+    {
+      title: "Reports & Analytics",
+      description: "Business intelligence and reporting",
+      icon: BarChart3,
+      href: "/reports",
       color: "text-red-600"
+    },
+    {
+      title: "System Settings",
+      description: "Company settings and system management",
+      icon: Settings,
+      href: "/settings",
+      color: "text-gray-600"
     }
   ]
 
-  const revenueData = [
-    { month: "Jan", revenue: 35000 },
-    { month: "Feb", revenue: 38000 },
-    { month: "Mar", revenue: 42000 },
-    { month: "Apr", revenue: 41000 },
-    { month: "May", revenue: 44000 },
-    { month: "Jun", revenue: 45231 }
-  ]
-
-  const maxRevenue = Math.max(...revenueData.map(d => d.revenue))
-
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+    <div className="container mx-auto p-6">
+      {/* Header */}
+      <div className="mb-8 text-center">
+        <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          ISP Management System
+        </h1>
+        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          Complete solution for managing your Internet Service Provider business with advanced features and analytics
+        </p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalCustomers.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+12%</span> from last month
-            </p>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Active Customers</p>
+                <p className="text-2xl font-bold">1,234</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-600" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.monthlyRevenue.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+8%</span> from last month
-            </p>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Monthly Revenue</p>
+                <p className="text-2xl font-bold">KES 2.5M</p>
+              </div>
+              <CreditCard className="h-8 w-8 text-green-600" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Network Uptime</CardTitle>
-            <Wifi className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.networkUptime}%</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-green-600">+0.2%</span> from last month
-            </p>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Network Uptime</p>
+                <p className="text-2xl font-bold">99.9%</p>
+              </div>
+              <Wifi className="h-8 w-8 text-purple-600" />
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Issues</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeIssues}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className="text-red-600">-2</span> from yesterday
-            </p>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Support Tickets</p>
+                <p className="text-2xl font-bold">23</p>
+              </div>
+              <Headphones className="h-8 w-8 text-orange-600" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Revenue Overview */}
-        <Card className="col-span-4">
-          <CardHeader>
-            <CardTitle>Revenue Overview</CardTitle>
-            <CardDescription>
-              Monthly revenue for the past 6 months
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <div className="space-y-3">
-              {revenueData.map((data, index) => (
-                <div key={data.month} className="flex items-center space-x-4">
-                  <div className="w-12 text-sm font-medium">{data.month}</div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="h-8 bg-blue-500 rounded" 
-                           style={{ width: `${(data.revenue / maxRevenue) * 100}%` }}>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="w-20 text-sm text-right">
-                    ${data.revenue.toLocaleString()}
-                  </div>
+      {/* Feature Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {features.map((feature, index) => {
+          const Icon = feature.icon
+          return (
+            <Card key={index} className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <Icon className={`h-6 w-6 ${feature.color}`} />
+                  <CardTitle className="text-lg">{feature.title}</CardTitle>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>
-              Latest system activities
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.map((activity) => {
-                const IconComponent = activity.icon
-                return (
-                  <div key={activity.id} className="flex items-start space-x-3">
-                    <div className={`p-2 rounded-full bg-gray-100 ${activity.color}`}>
-                      <IconComponent className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{activity.message}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time}</p>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{activity.details}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                <CardDescription>{feature.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={feature.href}>
+                  <Button variant="outline" className="w-full bg-transparent">
+                    Access Module
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
-      {/* Bottom Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Routers</CardTitle>
-            <Server className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">
-              Online: 23 <span className="text-red-600">Offline: 1</span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Invoices</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">127</div>
-            <p className="text-xs text-muted-foreground">
-              Total: $12,847
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bandwidth Usage</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">78%</div>
-            <p className="text-xs text-muted-foreground">
-              Peak: 89% at 8 PM
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Growth Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+12.5%</div>
-            <p className="text-xs text-muted-foreground">
-              Customer acquisition this month
-            </p>
-          </CardContent>
-        </Card>
+      {/* System Information */}
+      <div className="mt-8 p-6 bg-muted rounded-lg">
+        <h2 className="text-2xl font-semibold mb-4">System Information</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <h3 className="font-medium mb-2">Sample Data Included</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• 50+ customers with various profiles</li>
+              <li>• 8 service plans from basic to enterprise</li>
+              <li>• Payment history and billing data</li>
+              <li>• Network equipment and monitoring</li>
+              <li>• Support tickets and knowledge base</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-medium mb-2">System Features</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>• Real-time dashboard and analytics</li>
+              <li>• M-Pesa payment integration</li>
+              <li>• Automated billing and invoicing</li>
+              <li>• Network monitoring and alerts</li>
+              <li>• Customer portal and self-service</li>
+            </ul>
+          </div>
+        </div>
+        <div className="mt-4 flex space-x-4">
+          <Link href="/customers">
+            <Button>Get Started</Button>
+          </Link>
+          <Link href="/settings">
+            <Button variant="outline">System Settings</Button>
+          </Link>
+        </div>
       </div>
     </div>
   )

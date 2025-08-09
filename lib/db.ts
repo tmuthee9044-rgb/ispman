@@ -1,4 +1,5 @@
 // Simplified database configuration that works in both development and production
+import { Pool } from 'pg'
 let db: any = null
 
 // Mock database for development/demo purposes
@@ -24,20 +25,20 @@ async function initializeDb() {
   }
 
   try {
-    const mysql = await import("mysql2/promise")
-
-    const connection = await mysql.createConnection({
-      host: process.env.POSTGRES_HOST || "localhost",
-      user: process.env.POSTGRES_USER || "root",
-      password: process.env.POSTGRES_PASSWORD || "",
-      database: process.env.POSTGRES_DATABASE || "isp_system",
-      port: Number.parseInt(process.env.DB_PORT || "3306"),
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     })
 
     db = {
       execute: async (sql: string, params?: any[]) => {
-        const [results] = await connection.execute(sql, params)
-        return results
+        const client = await pool.connect()
+        try {
+          const result = await client.query(sql, params)
+          return result.rows
+        } finally {
+          client.release()
+        }
       },
     }
 

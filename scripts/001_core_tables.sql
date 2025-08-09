@@ -1,57 +1,70 @@
--- ISP Management System - Core Tables
--- This script creates all the main tables for the system
+-- ISP Management System - Core Database Tables
+-- This script creates the essential database structure
 
--- Company profile table
-CREATE TABLE company_profiles (
+-- Create extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+CREATE EXTENSION IF NOT EXISTS "btree_gin";
+
+-- Companies table
+CREATE TABLE IF NOT EXISTS companies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    company_name VARCHAR(255) NOT NULL,
-    company_logo TEXT,
-    address TEXT,
-    phone VARCHAR(20),
+    name VARCHAR(255) NOT NULL,
     email VARCHAR(255),
+    phone VARCHAR(50),
+    address TEXT,
     website VARCHAR(255),
-    tax_number VARCHAR(50),
-    currency VARCHAR(3) DEFAULT 'KES',
-    timezone VARCHAR(50) DEFAULT 'Africa/Nairobi',
+    tax_number VARCHAR(100),
+    registration_number VARCHAR(100),
+    logo_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insert default company profile
-INSERT INTO company_profiles (company_name, address, phone, email, currency)
-VALUES ('Your ISP Company', 'Nairobi, Kenya', '+254700000000', 'info@yourisp.com', 'KES');
+-- Users table (for system authentication)
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(50) DEFAULT 'user',
+    phone VARCHAR(50),
+    is_active BOOLEAN DEFAULT true,
+    last_login TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Customers table
-CREATE TABLE customers (
+CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id VARCHAR(20) UNIQUE NOT NULL DEFAULT generate_customer_id(),
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE,
-    phone VARCHAR(20) NOT NULL,
+    customer_number VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    phone VARCHAR(50),
     address TEXT,
-    location_coordinates POINT,
-    customer_type VARCHAR(20) DEFAULT 'individual',
-    status customer_status DEFAULT 'pending',
-    balance DECIMAL(12,2) DEFAULT 0.00,
-    credit_limit DECIMAL(12,2) DEFAULT 0.00,
-    portal_access BOOLEAN DEFAULT true,
-    portal_password_hash TEXT,
+    city VARCHAR(100),
+    postal_code VARCHAR(20),
+    id_number VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'active',
+    customer_type VARCHAR(50) DEFAULT 'individual',
+    registration_date DATE DEFAULT CURRENT_DATE,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Service plans table
-CREATE TABLE service_plans (
+CREATE TABLE IF NOT EXISTS service_plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    download_speed INTEGER NOT NULL, -- in Mbps
-    upload_speed INTEGER NOT NULL, -- in Mbps
-    data_limit INTEGER, -- in GB, NULL for unlimited
-    monthly_price DECIMAL(10,2) NOT NULL,
-    setup_fee DECIMAL(10,2) DEFAULT 0.00,
+    price DECIMAL(10,2) NOT NULL,
+    setup_fee DECIMAL(10,2) DEFAULT 0,
+    speed_download_mbps INTEGER,
+    speed_upload_mbps INTEGER,
+    data_limit_gb INTEGER,
+    billing_cycle VARCHAR(20) DEFAULT 'monthly',
     is_active BOOLEAN DEFAULT true,
     features JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,164 +72,73 @@ CREATE TABLE service_plans (
 );
 
 -- Customer services table
-CREATE TABLE customer_services (
+CREATE TABLE IF NOT EXISTS customer_services (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    service_plan_id UUID NOT NULL REFERENCES service_plans(id),
-    status service_status DEFAULT 'pending_activation',
-    installation_date DATE,
-    activation_date DATE,
-    suspension_date DATE,
-    termination_date DATE,
-    monthly_price DECIMAL(10,2) NOT NULL,
-    billing_cycle_start INTEGER DEFAULT 1, -- day of month
-    last_billed_date DATE,
-    next_billing_date DATE,
+    customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+    service_plan_id UUID REFERENCES service_plans(id),
+    status VARCHAR(50) DEFAULT 'active',
+    start_date DATE DEFAULT CURRENT_DATE,
+    end_date DATE,
+    monthly_fee DECIMAL(10,2),
+    installation_address TEXT,
+    equipment_serial VARCHAR(100),
     ip_address INET,
-    router_id UUID,
-    equipment_ids UUID[],
-    installation_notes TEXT,
-    technical_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Network routers table
-CREATE TABLE network_routers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    model VARCHAR(255),
-    ip_address INET NOT NULL UNIQUE,
-    location VARCHAR(255),
-    status router_status DEFAULT 'offline',
-    last_ping TIMESTAMP,
-    uptime_seconds BIGINT DEFAULT 0,
-    cpu_usage DECIMAL(5,2),
-    memory_usage DECIMAL(5,2),
-    bandwidth_usage JSONB,
-    configuration JSONB,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Equipment inventory table
-CREATE TABLE equipment_inventory (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    model VARCHAR(255),
-    brand VARCHAR(255),
-    serial_number VARCHAR(255) UNIQUE,
-    mac_address VARCHAR(17),
-    equipment_type VARCHAR(50) NOT NULL,
-    status equipment_status DEFAULT 'available',
-    purchase_date DATE,
-    purchase_price DECIMAL(10,2),
-    warranty_expiry DATE,
-    allocated_to_customer UUID REFERENCES customers(id),
-    allocation_date DATE,
-    location VARCHAR(255),
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Payments table
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    amount DECIMAL(12,2) NOT NULL,
-    payment_method payment_method NOT NULL,
+    customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+    amount DECIMAL(10,2) NOT NULL,
+    payment_method VARCHAR(50),
     payment_reference VARCHAR(255),
     transaction_id VARCHAR(255),
-    status payment_status DEFAULT 'pending',
-    payment_date TIMESTAMP,
+    payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'completed',
     description TEXT,
-    metadata JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Invoices table
-CREATE TABLE invoices (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    invoice_number VARCHAR(50) UNIQUE NOT NULL DEFAULT generate_invoice_number(),
-    customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    service_id UUID REFERENCES customer_services(id),
-    amount DECIMAL(12,2) NOT NULL,
-    tax_amount DECIMAL(12,2) DEFAULT 0.00,
-    total_amount DECIMAL(12,2) NOT NULL,
-    due_date DATE NOT NULL,
-    paid_date DATE,
-    status payment_status DEFAULT 'pending',
-    description TEXT,
-    line_items JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Support tickets table
-CREATE TABLE support_tickets (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    ticket_number VARCHAR(20) UNIQUE NOT NULL DEFAULT ('TKT' || nextval('ticket_number_seq')),
-    customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    description TEXT NOT NULL,
-    priority ticket_priority DEFAULT 'medium',
-    status ticket_status DEFAULT 'open',
-    assigned_to VARCHAR(255),
-    resolution TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    resolved_at TIMESTAMP
-);
-
--- System logs table
-CREATE TABLE system_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    table_name VARCHAR(100),
-    action VARCHAR(50),
-    record_id VARCHAR(100),
-    user_id VARCHAR(100),
-    ip_address INET,
-    user_agent TEXT,
-    details JSONB,
-    level log_level DEFAULT 'info',
+    invoice_number VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- IP address management
-CREATE TABLE ip_subnets (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    subnet CIDR NOT NULL UNIQUE,
-    description TEXT,
-    vlan_id INTEGER,
-    gateway INET,
-    dns_servers INET[],
-    is_active BOOLEAN DEFAULT true,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Insert company data
+INSERT INTO companies (name, email, phone, address, website) VALUES 
+('Your ISP Company', 'admin@yourisp.com', '+254700000000', 'Nairobi, Kenya', 'https://yourisp.com')
+ON CONFLICT DO NOTHING;
 
-CREATE TABLE ip_addresses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    ip_address INET NOT NULL UNIQUE,
-    subnet_id UUID NOT NULL REFERENCES ip_subnets(id),
-    customer_id UUID REFERENCES customers(id),
-    service_id UUID REFERENCES customer_services(id),
-    status VARCHAR(20) DEFAULT 'available',
-    assigned_date TIMESTAMP,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+-- Insert default admin user (password: admin123)
+INSERT INTO users (email, password_hash, name, role) VALUES 
+('admin@yourisp.com', '$2b$10$rQZ9QmjlZKZZ9QmjlZKZZOeKZZ9QmjlZKZZ9QmjlZKZZ9QmjlZKZZ', 'System Administrator', 'admin')
+ON CONFLICT (email) DO NOTHING;
 
--- Add comments for documentation
-COMMENT ON TABLE customers IS 'Customer information and account details';
-COMMENT ON TABLE service_plans IS 'Available internet service plans and pricing';
-COMMENT ON TABLE customer_services IS 'Active services assigned to customers';
-COMMENT ON TABLE payments IS 'Payment transactions and history';
-COMMENT ON TABLE invoices IS 'Generated invoices and billing records';
-COMMENT ON TABLE support_tickets IS 'Customer support tickets and issues';
-COMMENT ON TABLE network_routers IS 'Network infrastructure and monitoring';
-COMMENT ON TABLE equipment_inventory IS 'Customer premises equipment tracking';
+-- Insert service plans
+INSERT INTO service_plans (name, description, price, setup_fee, speed_download_mbps, speed_upload_mbps, data_limit_gb, features) VALUES 
+('Basic Home', 'Perfect for light internet usage', 1200.00, 500.00, 5, 2, 50, '{"wifi": true, "support": "email"}'),
+('Standard Home', 'Great for streaming and browsing', 2500.00, 500.00, 10, 5, 100, '{"wifi": true, "support": "phone", "streaming": true}'),
+('Premium Home', 'High-speed for heavy users', 4000.00, 1000.00, 20, 10, 200, '{"wifi": true, "support": "priority", "streaming": true, "gaming": true}'),
+('Business Basic', 'Small business solution', 5000.00, 1500.00, 25, 15, 300, '{"wifi": true, "support": "priority", "static_ip": true}'),
+('Business Standard', 'Growing business needs', 8000.00, 2000.00, 50, 25, 500, '{"wifi": true, "support": "24/7", "static_ip": true, "backup": true}'),
+('Business Premium', 'Enterprise-grade connectivity', 12000.00, 3000.00, 100, 50, 1000, '{"wifi": true, "support": "24/7", "static_ip": true, "backup": true, "sla": "99.9%"}'),
+('Enterprise', 'Large organization solution', 20000.00, 5000.00, 200, 100, 2000, '{"wifi": true, "support": "dedicated", "static_ip": true, "backup": true, "sla": "99.95%"}'),
+('Corporate Unlimited', 'Unlimited enterprise solution', 35000.00, 10000.00, 500, 250, NULL, '{"wifi": true, "support": "dedicated", "static_ip": true, "backup": true, "sla": "99.99%", "unlimited": true}')
+ON CONFLICT DO NOTHING;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
+CREATE INDEX IF NOT EXISTS idx_customers_customer_number ON customers(customer_number);
+
+CREATE INDEX IF NOT EXISTS idx_service_plans_price ON service_plans(price);
+CREATE INDEX IF NOT EXISTS idx_service_plans_active ON service_plans(is_active);
+
+CREATE INDEX IF NOT EXISTS idx_customer_services_customer_id ON customer_services(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_services_status ON customer_services(status);
+CREATE INDEX IF NOT EXISTS idx_customer_services_dates ON customer_services(start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_payments_customer_id ON payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_reference ON payments(payment_reference);

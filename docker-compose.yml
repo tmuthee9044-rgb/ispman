@@ -1,82 +1,31 @@
 version: '3.8'
 
 services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: isp_mysql
+  # PostgreSQL 15 Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: isp_postgres
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: isp_root_password_2024
-      MYSQL_DATABASE: isp_system
-      MYSQL_USER: isp_user
-      MYSQL_PASSWORD: isp_password_2024
+      POSTGRES_DB: isp_system
+      POSTGRES_USER: isp_user
+      POSTGRES_PASSWORD: isp_password_2024
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./scripts:/docker-entrypoint-initdb.d
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts:/docker-entrypoint-initdb.d:ro
     networks:
       - isp_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
+      test: ["CMD-SHELL", "pg_isready -U isp_user -d isp_system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # ISP Management Application
-  isp_app:
-    build: .
-    container_name: isp_management
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - DATABASE_URL=mysql://isp_user:isp_password_2024@mysql:3306/isp_system
-      - POSTGRES_HOST=mysql
-      - POSTGRES_USER=isp_user
-      - POSTGRES_PASSWORD=isp_password_2024
-      - POSTGRES_DATABASE=isp_system
-      - DB_PORT=3306
-      - NEXTAUTH_SECRET=your-secret-key-here-change-this
-      - NEXTAUTH_URL=http://localhost:3000
-    depends_on:
-      mysql:
-        condition: service_healthy
-    networks:
-      - isp_network
-
-  # RADIUS Server (FreeRADIUS)
-  freeradius:
-    image: freeradius/freeradius-server:latest
-    container_name: isp_radius
-    restart: unless-stopped
-    ports:
-      - "1812:1812/udp"  # Authentication
-      - "1813:1813/udp"  # Accounting
-    volumes:
-      - ./radius-config:/etc/freeradius
-      - radius_logs:/var/log/freeradius
-    networks:
-      - isp_network
-    depends_on:
-      - mysql
-
-  # OpenVPN Server
-  openvpn:
-    image: kylemanna/openvpn:latest
-    container_name: isp_openvpn
-    restart: unless-stopped
-    ports:
-      - "1194:1194/udp"
-    cap_add:
-      - NET_ADMIN
-    volumes:
-      - openvpn_data:/etc/openvpn
-    networks:
-      - isp_network
-
-  # Redis for caching and sessions
+  # Redis 7 for caching and sessions
   redis:
     image: redis:7-alpine
     container_name: isp_redis
@@ -87,8 +36,49 @@ services:
       - redis_data:/data
     networks:
       - isp_network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
-  # Nginx reverse proxy
+  # Next.js ISP Management Application
+  isp_app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: isp_management
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://isp_user:isp_password_2024@postgres:5432/isp_system
+      - NEXTAUTH_SECRET=your-super-secret-nextauth-key-change-this-in-production-2024
+      - NEXTAUTH_URL=http://localhost:3000
+      - REDIS_URL=redis://redis:6379
+      - COMPANY_NAME=Your ISP Company
+      - COMPANY_EMAIL=admin@yourisp.com
+      - COMPANY_PHONE=+254700000000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - isp_network
+    volumes:
+      - ./logs:/app/logs
+      - ./backup:/app/backup
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx reverse proxy and load balancer
   nginx:
     image: nginx:alpine
     container_name: isp_nginx
@@ -97,19 +87,31 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
     depends_on:
-      - isp_app
+      isp_app:
+        condition: service_healthy
     networks:
       - isp_network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
-  mysql_data:
-  openvpn_data:
-  radius_logs:
+  postgres_data:
+    driver: local
   redis_data:
+    driver: local
+  nginx_logs:
+    driver: local
 
 networks:
   isp_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

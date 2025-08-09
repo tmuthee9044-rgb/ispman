@@ -1,23 +1,28 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'standalone',
   experimental: {
-    serverComponentsExternalPackages: ['pg']
+    appDir: true,
   },
   images: {
-    domains: ['localhost'],
-    unoptimized: true
+    domains: ['localhost', 'placeholder.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
   env: {
-    DATABASE_URL: process.env.DATABASE_URL,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+    DATABASE_URL: process.env.DATABASE_URL,
+  },
+  output: 'standalone',
+  typescript: {
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
+    ignoreDuringBuilds: false,
   },
 }
 

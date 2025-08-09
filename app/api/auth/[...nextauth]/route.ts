@@ -20,7 +20,7 @@ const handler = NextAuth({
 
         try {
           const users = await sql`
-            SELECT id, email, name, password_hash, role 
+            SELECT id, email, name, password, role 
             FROM users 
             WHERE email = ${credentials.email}
           `
@@ -30,7 +30,7 @@ const handler = NextAuth({
           }
 
           const user = users[0]
-          const isPasswordValid = await bcrypt.compare(credentials.password, user.password_hash)
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
 
           if (!isPasswordValid) {
             return null

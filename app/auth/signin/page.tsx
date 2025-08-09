@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from "lucide-react"
 
 export default function SignIn() {
   const [email, setEmail] = useState("")
@@ -32,7 +31,7 @@ export default function SignIn() {
       })
 
       if (result?.error) {
-        setError("Invalid email or password")
+        setError("Invalid credentials")
       } else {
         const session = await getSession()
         if (session) {
@@ -41,20 +40,18 @@ export default function SignIn() {
         }
       }
     } catch (error) {
-      setError("An error occurred. Please try again.")
+      setError("An error occurred during sign in")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Sign in</CardTitle>
-          <CardDescription className="text-center">
-            Enter your email and password to access the ISP Management System
-          </CardDescription>
+        <CardHeader>
+          <CardTitle>Sign In</CardTitle>
+          <CardDescription>Enter your credentials to access the ISP Management System</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -63,7 +60,6 @@ export default function SignIn() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@isp.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -75,7 +71,6 @@ export default function SignIn() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -88,26 +83,13 @@ export default function SignIn() {
               </Alert>
             )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm font-medium text-blue-900 mb-2">Demo Credentials:</p>
-            <div className="text-sm text-blue-700 space-y-1">
-              <p>
-                <strong>Admin:</strong> admin@isp.com / admin123
-              </p>
-              <p>
-                <strong>User:</strong> user@isp.com / admin123
-              </p>
-            </div>
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium">Demo Credentials:</p>
+            <p className="text-sm text-blue-600">Admin: admin@isp.com / admin123</p>
+            <p className="text-sm text-blue-600">User: user@isp.com / admin123</p>
           </div>
         </CardContent>
       </Card>

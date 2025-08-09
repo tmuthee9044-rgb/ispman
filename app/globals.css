@@ -135,7 +135,8 @@
 
   /* Ensure proper mobile sheet behavior */
   [data-sidebar="sidebar"][data-mobile="true"] {
-    @apply w-[280px] max-w-[80vw];
+    width: 280px;
+    max-width: 80vw;
   }
 
   /* Reduce font sizes on mobile */

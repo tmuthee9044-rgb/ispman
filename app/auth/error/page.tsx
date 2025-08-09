@@ -18,23 +18,26 @@ export default function AuthError() {
   const searchParams = useSearchParams()
   const error = searchParams.get("error") as keyof typeof errorMessages
 
+  const errorMessage = errorMessages[error] || errorMessages.Default
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            Authentication Error
-          </CardTitle>
-          <CardDescription>There was a problem signing you in</CardDescription>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center text-red-600">Authentication Error</CardTitle>
+          <CardDescription className="text-center">There was a problem signing you in</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Alert variant="destructive">
-            <AlertDescription>{errorMessages[error] || errorMessages.Default}</AlertDescription>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
-          <div className="mt-4 flex justify-center">
+          <div className="flex flex-col space-y-2">
             <Button asChild>
               <Link href="/auth/signin">Try Again</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/">Go Home</Link>
             </Button>
           </div>
         </CardContent>

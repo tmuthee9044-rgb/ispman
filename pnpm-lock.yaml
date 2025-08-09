@@ -116,9 +116,6 @@ importers:
       react-dom:
         specifier: ^18
         version: 18.0.0(react@18.0.0)
-      react-hook-form:
-        specifier: ^7.49.3
-        version: 7.54.1(react@18.0.0)
       recharts:
         specifier: latest
         version: 3.1.2(@types/react@18.3.3)(react-dom@18.0.0(react@18.0.0))(react-is@19.1.1)(react@18.0.0)(redux@5.0.1)
@@ -145,10 +142,10 @@ importers:
         specifier: ^18
         version: 18.3.0
       autoprefixer:
-        specifier: ^10.4.17
+        specifier: ^10.0.1
         version: 10.4.20(postcss@8.5.0)
       eslint:
-        specifier: ^8.56.0
+        specifier: ^8
         version: 8.57.0
       eslint-config-next:
         specifier: 14.1.0
@@ -2576,12 +2573,6 @@ packages:
     resolution: {integrity: sha512-XqX7uzmFo0pUceWFCt7Gff6IyIMzFUn7QMZrbrQfGxtaxXZIcGQzoNpRLE3fQLnS4XzLLPMZX2T9TRcSrasicw==}
     peerDependencies:
       react: ^18.0.0
-
-  react-hook-form@7.54.1:
-    resolution: {integrity: sha512-PUNzFwQeQ5oHiiTUO7GO/EJXGEtuun2Y1A59rLnZBBj+vNEOWt/3ERTiG1/zt7dVeJEM+4vDX/7XQ/qanuvPMg==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      react: ^16.8.0 || ^17 || ^18 || ^19
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
@@ -5584,10 +5575,6 @@ snapshots:
       loose-envify: 1.4.0
       react: 18.0.0
       scheduler: 0.21.0
-
-  react-hook-form@7.54.1(react@18.0.0):
-    dependencies:
-      react: 18.0.0
 
   react-is@16.13.1: {}
 

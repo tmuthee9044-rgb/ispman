@@ -50,11 +50,9 @@ export default function SignIn() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
-          <CardDescription className="text-center">
-            Enter your credentials to access the ISP Management System
-          </CardDescription>
+        <CardHeader>
+          <CardTitle>Sign In</CardTitle>
+          <CardDescription>Enter your credentials to access the ISP Management System</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -63,7 +61,6 @@ export default function SignIn() {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@isp.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -75,7 +72,6 @@ export default function SignIn() {
               <Input
                 id="password"
                 type="password"
-                placeholder="Enter your password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -98,10 +94,10 @@ export default function SignIn() {
               )}
             </Button>
           </form>
-          <div className="mt-6 text-sm text-gray-600">
-            <p className="font-medium">Demo Credentials:</p>
-            <p>Admin: admin@isp.com / admin123</p>
-            <p>User: user@isp.com / admin123</p>
+          <div className="mt-4 p-4 bg-gray-100 rounded-md">
+            <p className="text-sm font-medium mb-2">Demo Credentials:</p>
+            <p className="text-xs text-gray-600">Admin: admin@isp.com / admin123</p>
+            <p className="text-xs text-gray-600">User: user@isp.com / admin123</p>
           </div>
         </CardContent>
       </Card>

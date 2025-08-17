@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ISP Management System Installation Script
-# This script will install Docker, Docker Compose, Node.js, and set up the ISP system
+# This script will install Node.js, dependencies, and set up the ISP system
 
 set -e
 
@@ -50,95 +50,6 @@ else
     exit 1
 fi
 
-# Function to install Docker on Linux
-install_docker_linux() {
-    print_status "Installing Docker on Linux..."
-    
-    # Update package index
-    sudo apt-get update
-    
-    # Install required packages
-    sudo apt-get install -y \
-        apt-transport-https \
-        ca-certificates \
-        curl \
-        gnupg \
-        lsb-release
-    
-    # Add Docker's official GPG key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    
-    # Set up stable repository
-    echo \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-        $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    # Install Docker Engine
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-    
-    # Add current user to docker group
-    sudo usermod -aG docker $USER
-    
-    print_success "Docker installed successfully"
-}
-
-# Function to install Docker on macOS
-install_docker_macos() {
-    print_status "Installing Docker on macOS..."
-    
-    # Check if Homebrew is installed
-    if ! command -v brew &> /dev/null; then
-        print_status "Installing Homebrew..."
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-    
-    # Install Docker Desktop
-    brew install --cask docker
-    
-    print_success "Docker Desktop installed. Please start Docker Desktop manually."
-    print_warning "You may need to restart your terminal or log out and back in."
-}
-
-# Function to install Docker Compose
-install_docker_compose() {
-    print_status "Installing Docker Compose..."
-    
-    # Download Docker Compose
-    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    
-    # Make it executable
-    sudo chmod +x /usr/local/bin/docker-compose
-    
-    print_success "Docker Compose installed successfully"
-}
-
-# Function to check if Docker is running
-check_docker() {
-    print_status "Checking Docker installation..."
-    
-    if ! command -v docker &> /dev/null; then
-        return 1
-    fi
-    
-    if ! docker --version &> /dev/null; then
-        return 1
-    fi
-    
-    return 0
-}
-
-# Function to check if Docker Compose is installed
-check_docker_compose() {
-    print_status "Checking Docker Compose installation..."
-    
-    if ! command -v docker-compose &> /dev/null; then
-        return 1
-    fi
-    
-    return 0
-}
-
 # Function to check Node.js version
 check_nodejs() {
     print_status "Checking Node.js installation..."
@@ -149,6 +60,11 @@ check_nodejs() {
             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
             sudo apt-get install -y nodejs
         elif [[ "$OS" == "macos" ]]; then
+            # Check if Homebrew is installed
+            if ! command -v brew &> /dev/null; then
+                print_status "Installing Homebrew..."
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            fi
             brew install node@18
         fi
     else
@@ -167,123 +83,77 @@ check_nodejs() {
     fi
 }
 
-# Function to initialize database with seed data
-init_database() {
-    print_status "Initializing database with seed data..."
+# Function to install dependencies
+install_dependencies() {
+    print_status "Installing project dependencies..."
     
-    # Wait for database to be ready
-    print_status "Waiting for database to be ready..."
-    sleep 45
-    
-    # Run database migrations and seed data
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/028_create_customer_services_and_payments.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/029_create_hr_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/030_create_payroll_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/031_create_comprehensive_vehicle_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/032_create_messaging_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/033_create_analytics_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/034_create_task_management_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/035_create_settings_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/036_create_comprehensive_logs_tables.sql || true
-    docker-compose exec -T mysql mysql -u isp_user -pisp_password_2024 isp_system < scripts/037_create_backup_tables.sql || true
-    
-    print_success "Database initialized with seed data"
-}
-
-# Function to create necessary directories and files
-setup_directories() {
-    print_status "Setting up directories and configuration files..."
-    
-    # Create directories
-    mkdir -p ssl
-    mkdir -p radius-config
-    mkdir -p logs
-    
-    # Create nginx configuration
-    cat > nginx.conf << 'EOF'
-events {
-    worker_connections 1024;
-}
-
-http {
-    upstream isp_app {
-        server isp_app:3000;
-    }
-
-    server {
-        listen 80;
-        server_name localhost;
-
-        location / {
-            proxy_pass http://isp_app;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
-}
-EOF
-
-    # Create environment file
-    cat > .env << 'EOF'
-# Database Configuration
-DATABASE_URL=mysql://isp_user:isp_password_2024@mysql:3306/isp_system
-POSTGRES_HOST=mysql
-POSTGRES_USER=isp_user
-POSTGRES_PASSWORD=isp_password_2024
-POSTGRES_DATABASE=isp_system
-DB_PORT=3306
-
-# Application Configuration
-NODE_ENV=production
-NEXTAUTH_SECRET=your-secret-key-here-change-this-in-production
-NEXTAUTH_URL=http://localhost:3000
-
-# MySQL Root Password
-MYSQL_ROOT_PASSWORD=isp_root_password_2024
-EOF
-
-    print_success "Configuration files created"
-}
-
-# Function to start the ISP system
-start_system() {
-    print_status "Starting ISP Management System..."
-    
-    # Build and start containers
-    docker-compose up -d --build
-    
-    print_status "Waiting for services to start..."
-    sleep 30
-    
-    # Check if services are running
-    if docker-compose ps | grep -q "Up"; then
-        print_success "ISP Management System started successfully!"
-        echo ""
-        echo "🎉 Installation Complete!"
-        echo "========================"
-        echo ""
-        echo "Access your ISP Management System at:"
-        echo "🌐 Web Interface: http://localhost:3000"
-        echo "🗄️  Database: localhost:3306"
-        echo "🔐 RADIUS Server: localhost:1812 (Auth), localhost:1813 (Accounting)"
-        echo "🔒 OpenVPN Server: localhost:1194"
-        echo ""
-        echo "Default Database Credentials:"
-        echo "Username: isp_user"
-        echo "Password: isp_password_2024"
-        echo "Database: isp_system"
-        echo ""
-        echo "⚠️  IMPORTANT: Change default passwords in production!"
-        echo ""
-        echo "To stop the system: docker-compose down"
-        echo "To view logs: docker-compose logs -f"
-        echo "To restart: docker-compose restart"
+    if command -v bun &> /dev/null; then
+        print_status "Using Bun package manager..."
+        bun install
+    elif command -v yarn &> /dev/null; then
+        print_status "Using Yarn package manager..."
+        yarn install
     else
-        print_error "Some services failed to start. Check logs with: docker-compose logs"
-        exit 1
+        print_status "Using npm package manager..."
+        npm install
     fi
+    
+    print_success "Dependencies installed successfully"
+}
+
+# Function to build the application
+build_application() {
+    print_status "Building the application..."
+    
+    if command -v bun &> /dev/null; then
+        bun run build
+    elif command -v yarn &> /dev/null; then
+        yarn build
+    else
+        npm run build
+    fi
+    
+    print_success "Application built successfully"
+}
+
+# Function to setup database
+setup_database() {
+    print_status "Setting up database..."
+    
+    # Check if DATABASE_URL is set
+    if [ -z "$DATABASE_URL" ]; then
+        print_warning "DATABASE_URL not found in environment variables"
+        print_status "Please ensure your Neon database is connected in Project Settings"
+        print_status "The database will be initialized when you complete the setup at /setup"
+    else
+        print_success "Database connection configured"
+    fi
+}
+
+# Function to start the development server
+start_server() {
+    print_status "Starting the ISP Management System..."
+    
+    echo ""
+    echo "🎉 Installation Complete!"
+    echo "========================"
+    echo ""
+    echo "To start the development server, run:"
+    if command -v bun &> /dev/null; then
+        echo "  bun dev"
+    elif command -v yarn &> /dev/null; then
+        echo "  yarn dev"
+    else
+        echo "  npm run dev"
+    fi
+    echo ""
+    echo "Then visit: http://localhost:3000/setup"
+    echo "Complete the initial setup to configure your ISP system"
+    echo ""
+    echo "⚠️  Make sure to:"
+    echo "1. Connect your Neon database in Project Settings"
+    echo "2. Complete the setup wizard at /setup"
+    echo "3. Change default passwords in production"
 }
 
 # Main installation process
@@ -293,34 +163,17 @@ main() {
     # Check Node.js version
     check_nodejs
     
-    # Check if Docker is already installed
-    if ! check_docker; then
-        print_status "Docker not found. Installing Docker..."
-        if [[ "$OS" == "linux" ]]; then
-            install_docker_linux
-        elif [[ "$OS" == "macos" ]]; then
-            install_docker_macos
-        fi
-    else
-        print_success "Docker is already installed"
-    fi
+    # Install dependencies
+    install_dependencies
     
-    # Check if Docker Compose is already installed
-    if ! check_docker_compose; then
-        print_status "Docker Compose not found. Installing Docker Compose..."
-        install_docker_compose
-    else
-        print_success "Docker Compose is already installed"
-    fi
+    # Build application
+    build_application
     
-    # Setup directories and configuration
-    setup_directories
+    # Setup database
+    setup_database
     
-    # Start the system
-    start_system
-    
-    # Initialize database
-    init_database
+    # Show completion message
+    start_server
 }
 
 # Run main function

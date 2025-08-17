@@ -55,31 +55,45 @@ check_nodejs() {
     print_status "Checking Node.js installation..."
     
     if ! command -v node &> /dev/null; then
-        print_warning "Node.js not found. Installing Node.js..."
-        if [[ "$OS" == "linux" ]]; then
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-            sudo apt-get install -y nodejs
-        elif [[ "$OS" == "macos" ]]; then
-            # Check if Homebrew is installed
-            if ! command -v brew &> /dev/null; then
-                print_status "Installing Homebrew..."
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            fi
-            brew install node@18
-        fi
+        print_warning "Node.js not found. Installing Node.js 20..."
+        install_nodejs
     else
-        NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-        if [[ $NODE_VERSION -lt 18 ]]; then
-            print_warning "Node.js version $NODE_VERSION detected. Upgrading to Node.js 18..."
-            if [[ "$OS" == "linux" ]]; then
-                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-                sudo apt-get install -y nodejs
-            elif [[ "$OS" == "macos" ]]; then
-                brew install node@18
-            fi
+        NODE_VERSION=$(node --version | cut -d'v' -f2)
+        MAJOR_VERSION=$(echo $NODE_VERSION | cut -d'.' -f1)
+        
+        if [[ $MAJOR_VERSION -lt 20 ]]; then
+            print_warning "Node.js version $NODE_VERSION detected. This system requires Node.js 20+ for compatibility with @neondatabase/serverless"
+            print_status "Upgrading to Node.js 20..."
+            install_nodejs
         else
-            print_success "Node.js $(node --version) is installed"
+            print_success "Node.js $NODE_VERSION is installed and compatible"
         fi
+    fi
+}
+
+# Function to install Node.js 20
+install_nodejs() {
+    if [[ "$OS" == "linux" ]]; then
+        print_status "Installing Node.js 20 via NodeSource repository..."
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt-get install -y nodejs
+    elif [[ "$OS" == "macos" ]]; then
+        # Check if Homebrew is installed
+        if ! command -v brew &> /dev/null; then
+            print_status "Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+        print_status "Installing Node.js 20 via Homebrew..."
+        brew install node@20
+        brew link --overwrite node@20
+    fi
+    
+    # Verify installation
+    if command -v node &> /dev/null; then
+        print_success "Node.js $(node --version) installed successfully"
+    else
+        print_error "Failed to install Node.js. Please install manually from https://nodejs.org"
+        exit 1
     fi
 }
 
@@ -87,15 +101,41 @@ check_nodejs() {
 install_dependencies() {
     print_status "Installing project dependencies..."
     
+    # Check if we have write permissions to the current directory
+    if [ ! -w "." ]; then
+        print_error "No write permission in current directory. Please run from a directory you own."
+        print_status "Try: cd ~ && git clone <repository> && cd <project>"
+        exit 1
+    fi
+    
+    # Fix ownership if needed (common issue when cloning as different user)
+    if [ -d "node_modules" ] && [ ! -w "node_modules" ]; then
+        print_status "Fixing node_modules permissions..."
+        sudo chown -R $USER:$USER node_modules 2>/dev/null || true
+    fi
+    
+    # Clear npm cache if there are permission issues
+    npm cache clean --force 2>/dev/null || true
+    
+    # Install dependencies with error handling
     if command -v bun &> /dev/null; then
         print_status "Using Bun package manager..."
-        bun install
+        if ! bun install; then
+            print_error "Bun installation failed. Falling back to npm..."
+            npm install
+        fi
     elif command -v yarn &> /dev/null; then
         print_status "Using Yarn package manager..."
-        yarn install
+        if ! yarn install; then
+            print_error "Yarn installation failed. Falling back to npm..."
+            npm install
+        fi
     else
         print_status "Using npm package manager..."
-        npm install
+        if ! npm install; then
+            print_error "npm install failed. Trying with --no-optional flag..."
+            npm install --no-optional
+        fi
     fi
     
     print_success "Dependencies installed successfully"
@@ -160,14 +200,26 @@ start_server() {
 main() {
     print_status "Starting ISP Management System installation..."
     
+    # Check if we're in the right directory
+    if [ ! -f "package.json" ]; then
+        print_error "package.json not found. Please run this script from the project root directory."
+        exit 1
+    fi
+    
     # Check Node.js version
     check_nodejs
     
-    # Install dependencies
-    install_dependencies
+    # Install dependencies with error handling
+    if ! install_dependencies; then
+        print_error "Failed to install dependencies. Please check the error messages above."
+        print_status "You can try running 'npm install' manually after fixing any issues."
+        exit 1
+    fi
     
     # Build application
-    build_application
+    if ! build_application; then
+        print_warning "Build failed, but you can still run in development mode"
+    fi
     
     # Setup database
     setup_database

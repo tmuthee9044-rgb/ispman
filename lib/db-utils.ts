@@ -164,7 +164,9 @@ export class DatabaseUtils {
 
     if (customerId) {
       return await sql`
-        SELECT p.*, c.name as customer_name, c.email as customer_email
+        SELECT p.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               c.email as customer_email
         FROM payments p
         JOIN customers c ON p.customer_id = c.id
         WHERE p.customer_id = ${customerId}
@@ -172,7 +174,9 @@ export class DatabaseUtils {
       `
     } else if (status) {
       return await sql`
-        SELECT p.*, c.name as customer_name, c.email as customer_email
+        SELECT p.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               c.email as customer_email
         FROM payments p
         JOIN customers c ON p.customer_id = c.id
         WHERE p.status = ${status}
@@ -180,7 +184,9 @@ export class DatabaseUtils {
       `
     } else {
       return await sql`
-        SELECT p.*, c.name as customer_name, c.email as customer_email
+        SELECT p.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               c.email as customer_email
         FROM payments p
         JOIN customers c ON p.customer_id = c.id
         ORDER BY p.payment_date DESC
@@ -194,37 +200,43 @@ export class DatabaseUtils {
 
     if (customerId) {
       return await sql`
-        SELECT st.*, c.name as customer_name, u.name as assigned_to_name,
+        SELECT st.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               u.name as assigned_to_name,
                COUNT(tr.id) as response_count
         FROM support_tickets st
         JOIN customers c ON st.customer_id = c.id
         LEFT JOIN users u ON st.assigned_to = u.id
         LEFT JOIN ticket_responses tr ON st.id = tr.ticket_id
         WHERE st.customer_id = ${customerId}
-        GROUP BY st.id, c.name, u.name
+        GROUP BY st.id, c.first_name, c.last_name, u.name
         ORDER BY st.created_at DESC
       `
     } else if (status) {
       return await sql`
-        SELECT st.*, c.name as customer_name, u.name as assigned_to_name,
+        SELECT st.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               u.name as assigned_to_name,
                COUNT(tr.id) as response_count
         FROM support_tickets st
         JOIN customers c ON st.customer_id = c.id
         LEFT JOIN users u ON st.assigned_to = u.id
         LEFT JOIN ticket_responses tr ON st.id = tr.ticket_id
         WHERE st.status = ${status}
-        GROUP BY st.id, c.name, u.name
+        GROUP BY st.id, c.first_name, c.last_name, u.name
         ORDER BY st.created_at DESC
       `
     } else {
       return await sql`
-        SELECT st.*, c.name as customer_name, u.name as assigned_to_name,
+        SELECT st.*, 
+               CONCAT(c.first_name, ' ', c.last_name) as customer_name, 
+               u.name as assigned_to_name,
                COUNT(tr.id) as response_count
         FROM support_tickets st
         JOIN customers c ON st.customer_id = c.id
         LEFT JOIN users u ON st.assigned_to = u.id
         LEFT JOIN ticket_responses tr ON st.id = tr.ticket_id
-        GROUP BY st.id, c.name, u.name
+        GROUP BY st.id, c.first_name, c.last_name, u.name
         ORDER BY st.created_at DESC
       `
     }

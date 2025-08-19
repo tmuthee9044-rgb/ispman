@@ -17,6 +17,7 @@ import {
   Package,
   BarChart3,
   MessageSquare,
+  Router,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -124,6 +125,29 @@ const data = {
         {
           title: "IP Configuration",
           url: "/network/ip-config",
+        },
+      ],
+    },
+    {
+      title: "Hotspot Management",
+      url: "#",
+      icon: Router,
+      items: [
+        {
+          title: "All Hotspots",
+          url: "/hotspots",
+        },
+        {
+          title: "Add Hotspot",
+          url: "/hotspots/add",
+        },
+        {
+          title: "User Management",
+          url: "/hotspots/users",
+        },
+        {
+          title: "Voucher System",
+          url: "/hotspots/vouchers",
         },
       ],
     },

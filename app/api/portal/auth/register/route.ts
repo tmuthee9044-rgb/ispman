@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
     // Hash password (in production, use proper password hashing like bcrypt)
     const hashedPassword = Buffer.from(password).toString("base64") // Simple encoding for demo
 
-    // Create customer record
     const newCustomer = await sql`
       INSERT INTO customers (
         account_number,
@@ -61,19 +60,15 @@ export async function POST(request: NextRequest) {
         id_number,
         address,
         city,
-        county,
+        state,
         postal_code,
-        service_type,
-        preferred_plan,
+        customer_type,
+        service_preferences,
         installation_address,
         portal_password,
         status,
-        registration_date,
-        agree_terms,
-        agree_privacy,
-        agree_marketing,
-        email_verified,
-        portal_access
+        created_at,
+        updated_at
       ) VALUES (
         ${accountNumber},
         ${firstName},
@@ -85,17 +80,20 @@ export async function POST(request: NextRequest) {
         ${city || null},
         ${county || null},
         ${postalCode || null},
-        ${serviceType || "residential"},
-        ${preferredPlan || null},
+        ${serviceType || "individual"},
+        ${JSON.stringify({
+          preferred_plan: preferredPlan,
+          agree_terms: agreeTerms,
+          agree_privacy: agreePrivacy,
+          agree_marketing: agreeMarketing,
+          email_verified: false,
+          portal_access: true,
+        })},
         ${installationAddress || null},
         ${hashedPassword},
         'pending',
         NOW(),
-        ${agreeTerms},
-        ${agreePrivacy},
-        ${agreeMarketing},
-        false,
-        true
+        NOW()
       )
       RETURNING id, account_number, email, first_name, last_name
     `

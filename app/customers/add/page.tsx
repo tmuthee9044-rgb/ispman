@@ -12,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { MapPicker } from "@/components/ui/map-picker"
-import { createCustomer } from "@/app/actions/customer-actions"
 import {
   ArrowLeft,
   Plus,
@@ -169,27 +168,49 @@ export default function AddCustomerPage() {
     try {
       const formData = new FormData(e.target as HTMLFormElement)
 
-      // Add customer type and portal credentials to form data
       formData.append("customer_type", customerType)
-      formData.append("portal_login_id", portalCredentials.loginId)
       formData.append("portal_username", portalCredentials.username)
       formData.append("portal_password", portalCredentials.password)
 
-      const result = await createCustomer(formData)
+      formData.append("physical_lat", physicalCoordinates.lat.toString())
+      formData.append("physical_lng", physicalCoordinates.lng.toString())
+      formData.append("billing_lat", billingCoordinates.lat.toString())
+      formData.append("billing_lng", billingCoordinates.lng.toString())
+
+      phoneNumbers.forEach((phone, index) => {
+        formData.append(`phone_${index}`, phone.number)
+        formData.append(`phone_type_${index}`, phone.type)
+      })
+
+      emergencyContacts.forEach((contact, index) => {
+        formData.append(`emergency_name_${index}`, contact.name)
+        formData.append(`emergency_phone_${index}`, contact.phone)
+        formData.append(`emergency_relationship_${index}`, contact.relationship)
+        formData.append(`emergency_email_${index}`, contact.email || "")
+      })
+
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
 
       if (result.success) {
         toast({
-          title: "Customer Added Successfully",
-          description: `Customer created with Portal Login ID: ${portalCredentials.loginId}`,
+          title: "Success",
+          description: "Customer created successfully",
         })
-        router.push("/customers")
+        // Reset form or redirect
+        window.location.href = "/customers"
       } else {
         throw new Error(result.error || "Failed to create customer")
       }
     } catch (error) {
+      console.error("Error creating customer:", error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add customer. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create customer",
         variant: "destructive",
       })
     } finally {
@@ -416,7 +437,7 @@ export default function AddCustomerPage() {
                 </Label>
                 <Input
                   id="firstName"
-                  name="name"
+                  name="first_name"
                   placeholder={
                     customerType === "individual"
                       ? "John"
@@ -449,7 +470,7 @@ export default function AddCustomerPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="gender">Gender</Label>
-                  <Select>
+                  <Select name="gender">
                     <SelectTrigger>
                       <SelectValue placeholder="Select gender" />
                     </SelectTrigger>
@@ -511,7 +532,7 @@ export default function AddCustomerPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="businessType">Business Type</Label>
-                  <Select>
+                  <Select name="business_type">
                     <SelectTrigger>
                       <SelectValue placeholder="Select business type" />
                     </SelectTrigger>
@@ -869,7 +890,7 @@ export default function AddCustomerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="servicePlan">Initial Service Plan</Label>
-                <Select>
+                <Select name="service_plan">
                   <SelectTrigger>
                     <SelectValue placeholder="Select a plan" />
                   </SelectTrigger>
@@ -885,7 +906,7 @@ export default function AddCustomerPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Initial Status</Label>
-                <Select defaultValue="pending">
+                <Select defaultValue="pending" name="status">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -949,7 +970,7 @@ export default function AddCustomerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="connectionType">Connection Type</Label>
-                <Select>
+                <Select name="connection_type">
                   <SelectTrigger>
                     <SelectValue placeholder="Select connection type" />
                   </SelectTrigger>
@@ -963,7 +984,7 @@ export default function AddCustomerPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="equipmentNeeded">Equipment Needed</Label>
-                <Select>
+                <Select name="equipment_needed">
                   <SelectTrigger>
                     <SelectValue placeholder="Select equipment" />
                   </SelectTrigger>
@@ -1010,7 +1031,7 @@ export default function AddCustomerPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="referralSource">How did you hear about us?</Label>
-              <Select>
+              <Select name="referral_source">
                 <SelectTrigger>
                   <SelectValue placeholder="Select referral source" />
                 </SelectTrigger>
@@ -1048,7 +1069,7 @@ export default function AddCustomerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="salesRep">Sales Representative</Label>
-                <Select>
+                <Select name="sales_rep">
                   <SelectTrigger>
                     <SelectValue placeholder="Select sales rep" />
                   </SelectTrigger>
@@ -1062,7 +1083,7 @@ export default function AddCustomerPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="accountManager">Account Manager</Label>
-                <Select>
+                <Select name="account_manager">
                   <SelectTrigger>
                     <SelectValue placeholder="Select account manager" />
                   </SelectTrigger>

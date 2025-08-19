@@ -12,6 +12,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Calendar,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +22,10 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { format } from "date-fns"
 import Link from "next/link"
 
 // Sample payments data
@@ -102,6 +108,11 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterMethod, setFilterMethod] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [filterPlan, setFilterPlan] = useState("all")
+  const [amountRange, setAmountRange] = useState("all")
+  const [dateFrom, setDateFrom] = useState<Date>()
+  const [dateTo, setDateTo] = useState<Date>()
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const { toast } = useToast()
 
   const filteredPayments = payments.filter((payment) => {
@@ -112,17 +123,89 @@ export default function PaymentsPage() {
 
     const matchesMethod = filterMethod === "all" || payment.method === filterMethod
     const matchesStatus = filterStatus === "all" || payment.status === filterStatus
+    const matchesPlan = filterPlan === "all" || payment.plan.includes(filterPlan)
 
-    return matchesSearch && matchesMethod && matchesStatus
+    // Date filtering
+    const paymentDate = new Date(payment.date)
+    const matchesDateFrom = !dateFrom || paymentDate >= dateFrom
+    const matchesDateTo = !dateTo || paymentDate <= dateTo
+
+    // Amount filtering
+    let matchesAmount = true
+    if (amountRange !== "all") {
+      switch (amountRange) {
+        case "0-1000":
+          matchesAmount = payment.amount <= 1000
+          break
+        case "1001-2500":
+          matchesAmount = payment.amount > 1000 && payment.amount <= 2500
+          break
+        case "2501-5000":
+          matchesAmount = payment.amount > 2500 && payment.amount <= 5000
+          break
+        case "5000+":
+          matchesAmount = payment.amount > 5000
+          break
+      }
+    }
+
+    return (
+      matchesSearch &&
+      matchesMethod &&
+      matchesStatus &&
+      matchesPlan &&
+      matchesDateFrom &&
+      matchesDateTo &&
+      matchesAmount
+    )
   })
 
-  const totalPayments = payments.reduce(
+  const totalPayments = filteredPayments.reduce(
     (sum, payment) => (payment.status === "completed" ? sum + payment.amount : sum),
     0,
   )
-  const completedPayments = payments.filter((p) => p.status === "completed").length
-  const pendingPayments = payments.filter((p) => p.status === "pending").length
-  const failedPayments = payments.filter((p) => p.status === "failed").length
+  const completedPayments = filteredPayments.filter((p) => p.status === "completed").length
+  const pendingPayments = filteredPayments.filter((p) => p.status === "pending").length
+  const failedPayments = filteredPayments.filter((p) => p.status === "failed").length
+
+  const clearFilters = () => {
+    setSearchTerm("")
+    setFilterMethod("all")
+    setFilterStatus("all")
+    setFilterPlan("all")
+    setAmountRange("all")
+    setDateFrom(undefined)
+    setDateTo(undefined)
+  }
+
+  const handleExport = () => {
+    const filterParams = {
+      search: searchTerm,
+      method: filterMethod,
+      status: filterStatus,
+      plan: filterPlan,
+      amountRange,
+      dateFrom: dateFrom ? format(dateFrom, "yyyy-MM-dd") : null,
+      dateTo: dateTo ? format(dateTo, "yyyy-MM-dd") : null,
+      totalRecords: filteredPayments.length,
+      totalAmount: totalPayments,
+    }
+
+    toast({
+      title: "Export Started",
+      description: `Exporting ${filteredPayments.length} payment records with applied filters...`,
+    })
+
+    // Here you would typically send filterParams to your export API
+    console.log("Export parameters:", filterParams)
+  }
+
+  const handleRetryPayment = (paymentId: string, customer: string) => {
+    toast({
+      title: "Payment Retry Initiated",
+      description: `Retrying payment ${paymentId} for ${customer}`,
+    })
+  }
 
   const getPaymentIcon = (method: string) => {
     switch (method) {
@@ -150,20 +233,6 @@ export default function PaymentsPage() {
     }
   }
 
-  const handleExport = () => {
-    toast({
-      title: "Export Started",
-      description: "Payments report is being generated...",
-    })
-  }
-
-  const handleRetryPayment = (paymentId: string, customer: string) => {
-    toast({
-      title: "Payment Retry Initiated",
-      description: `Retrying payment ${paymentId} for ${customer}`,
-    })
-  }
-
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between space-y-2">
@@ -179,10 +248,16 @@ export default function PaymentsPage() {
             <p className="text-muted-foreground">Track and manage all customer payments</p>
           </div>
         </div>
-        <Button onClick={handleExport}>
-          <Download className="h-4 w-4 mr-2" />
-          Export Report
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+            <Filter className="h-4 w-4 mr-2" />
+            {showAdvancedFilters ? "Hide" : "Show"} Filters
+          </Button>
+          <Button onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Export Report
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -222,13 +297,15 @@ export default function PaymentsPage() {
             <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Math.round((completedPayments / payments.length) * 100)}%</div>
+            <div className="text-2xl font-bold">
+              {filteredPayments.length > 0 ? Math.round((completedPayments / filteredPayments.length) * 100) : 0}%
+            </div>
             <p className="text-xs text-muted-foreground">payment success rate</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Basic Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -263,6 +340,94 @@ export default function PaymentsPage() {
           </SelectContent>
         </Select>
       </div>
+
+      {showAdvancedFilters && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Advanced Filters</CardTitle>
+            <CardDescription>Customize your payment report with detailed filtering options</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {/* Date Range Filter */}
+              <div className="space-y-2">
+                <Label>Date From</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dateFrom ? format(dateFrom, "PPP") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Date To</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal bg-transparent">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {dateTo ? format(dateTo, "PPP") : "Select date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent mode="single" selected={dateTo} onSelect={setDateTo} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Service Plan Filter */}
+              <div className="space-y-2">
+                <Label>Service Plan</Label>
+                <Select value={filterPlan} onValueChange={setFilterPlan}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Plans" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plans</SelectItem>
+                    <SelectItem value="Basic">Basic Plans</SelectItem>
+                    <SelectItem value="Standard">Standard Plans</SelectItem>
+                    <SelectItem value="Premium">Premium Plans</SelectItem>
+                    <SelectItem value="Business">Business Plans</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Amount Range Filter */}
+              <div className="space-y-2">
+                <Label>Amount Range</Label>
+                <Select value={amountRange} onValueChange={setAmountRange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Amounts" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Amounts</SelectItem>
+                    <SelectItem value="0-1000">KSh 0 - 1,000</SelectItem>
+                    <SelectItem value="1001-2500">KSh 1,001 - 2,500</SelectItem>
+                    <SelectItem value="2501-5000">KSh 2,501 - 5,000</SelectItem>
+                    <SelectItem value="5000+">KSh 5,000+</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={clearFilters}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+              <Button onClick={handleExport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export Filtered Data
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Payments Table */}
       <Card>

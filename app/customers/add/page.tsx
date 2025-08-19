@@ -27,14 +27,23 @@ import {
   Shield,
   Key,
   RefreshCw,
+  Package,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
 export default function AddCustomerPage() {
-  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [servicePlans, setServicePlans] = useState<any[]>([])
+  const [selectedPlan, setSelectedPlan] = useState<any>(null)
+  const [loadingPlans, setLoadingPlans] = useState(true)
+  const [inventoryItems, setInventoryItems] = useState<any[]>([])
+  const [itemsByCategory, setItemsByCategory] = useState<Record<string, any[]>>({})
+  const [selectedItems, setSelectedItems] = useState<Array<{ id: number; quantity: number; item: any }>>([])
+  const [loadingInventory, setLoadingInventory] = useState(true)
   const { toast } = useToast()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [customerType, setCustomerType] = useState("individual")
   const [phoneNumbers, setPhoneNumbers] = useState([{ id: 1, number: "", type: "mobile", isPrimary: true }])
@@ -73,6 +82,64 @@ export default function AddCustomerPage() {
       document.head.removeChild(link)
       document.head.removeChild(script)
     }
+  }, [])
+
+  useEffect(() => {
+    const fetchServicePlans = async () => {
+      try {
+        const response = await fetch("/api/service-plans")
+        const data = await response.json()
+
+        if (data.success) {
+          setServicePlans(data.plans)
+        } else {
+          toast({
+            title: "Warning",
+            description: "Could not load service plans. Using default options.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching service plans:", error)
+        toast({
+          title: "Warning",
+          description: "Could not load service plans. Using default options.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoadingPlans(false)
+      }
+    }
+
+    const fetchInventoryItems = async () => {
+      try {
+        const response = await fetch("/api/inventory/available")
+        const data = await response.json()
+
+        if (data.success) {
+          setInventoryItems(data.items)
+          setItemsByCategory(data.itemsByCategory)
+        } else {
+          toast({
+            title: "Warning",
+            description: "Could not load inventory items.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching inventory items:", error)
+        toast({
+          title: "Warning",
+          description: "Could not load inventory items.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoadingInventory(false)
+      }
+    }
+
+    fetchServicePlans()
+    fetchInventoryItems()
   }, [])
 
   const generatePortalCredentials = () => {
@@ -161,60 +228,97 @@ export default function AddCustomerPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const handlePlanSelection = (planId: string) => {
+    const plan = servicePlans.find((p) => p.id.toString() === planId)
+    setSelectedPlan(plan)
+  }
+
+  const addInventoryItem = (item: any) => {
+    const existingItem = selectedItems.find((selected) => selected.id === item.id)
+    if (existingItem) {
+      setSelectedItems(
+        selectedItems.map((selected) =>
+          selected.id === item.id ? { ...selected, quantity: selected.quantity + 1 } : selected,
+        ),
+      )
+    } else {
+      setSelectedItems([...selectedItems, { id: item.id, quantity: 1, item }])
+    }
+  }
+
+  const removeInventoryItem = (itemId: number) => {
+    setSelectedItems(selectedItems.filter((selected) => selected.id !== itemId))
+  }
+
+  const updateItemQuantity = (itemId: number, quantity: number) => {
+    if (quantity <= 0) {
+      removeInventoryItem(itemId)
+    } else {
+      setSelectedItems(selectedItems.map((selected) => (selected.id === itemId ? { ...selected, quantity } : selected)))
+    }
+  }
+
+  const getTotalInventoryCost = () => {
+    return selectedItems.reduce((total, selected) => total + selected.item.unitCost * selected.quantity, 0)
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-KE", {
+      style: "currency",
+      currency: "KES",
+      minimumFractionDigits: 0,
+    }).format(amount / 100) // Convert from cents
+  }
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setIsSubmitting(true)
 
     try {
-      const formData = new FormData(e.target as HTMLFormElement)
+      const formData = new FormData(event.currentTarget)
 
-      formData.append("customer_type", customerType)
-      formData.append("portal_username", portalCredentials.username)
-      formData.append("portal_password", portalCredentials.password)
+      if (selectedPlan) {
+        formData.set("plan_name", selectedPlan.name)
+        formData.set("plan_price", selectedPlan.price.toString())
+        formData.set("plan_speed", selectedPlan.speed)
+      }
 
-      formData.append("physical_lat", physicalCoordinates.lat.toString())
-      formData.append("physical_lng", physicalCoordinates.lng.toString())
-      formData.append("billing_lat", billingCoordinates.lat.toString())
-      formData.append("billing_lng", billingCoordinates.lng.toString())
-
-      phoneNumbers.forEach((phone, index) => {
-        formData.append(`phone_${index}`, phone.number)
-        formData.append(`phone_type_${index}`, phone.type)
-      })
-
-      emergencyContacts.forEach((contact, index) => {
-        formData.append(`emergency_name_${index}`, contact.name)
-        formData.append(`emergency_phone_${index}`, contact.phone)
-        formData.append(`emergency_relationship_${index}`, contact.relationship)
-        formData.append(`emergency_email_${index}`, contact.email || "")
-      })
+      if (selectedItems.length > 0) {
+        formData.set("selected_inventory", JSON.stringify(selectedItems))
+        formData.set("inventory_total_cost", getTotalInventoryCost().toString())
+      }
 
       const response = await fetch("/api/customers", {
         method: "POST",
         body: formData,
       })
 
-      const result = await response.json()
-
-      if (result.success) {
+      if (response.ok) {
         toast({
-          title: "Success",
-          description: "Customer created successfully",
+          title: "Success!",
+          description: "Customer has been added successfully.",
         })
         // Reset form or redirect
-        window.location.href = "/customers"
+        event.currentTarget.reset()
+        setSelectedPlan(null)
+        setSelectedItems([])
       } else {
-        throw new Error(result.error || "Failed to create customer")
+        const errorData = await response.json()
+        toast({
+          title: "Error",
+          description: errorData.error || "Failed to add customer. Please try again.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("Error creating customer:", error)
+      console.error("Error submitting form:", error)
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create customer",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -890,19 +994,31 @@ export default function AddCustomerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="servicePlan">Initial Service Plan</Label>
-                <Select name="service_plan">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a plan" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="basic">Basic Plan - $29.99/month (10/5 Mbps)</SelectItem>
-                    <SelectItem value="standard">Standard Plan - $49.99/month (50/25 Mbps)</SelectItem>
-                    <SelectItem value="premium">Premium Plan - $79.99/month (100/50 Mbps)</SelectItem>
-                    <SelectItem value="business-basic">Business Basic - $99.99/month (150/75 Mbps)</SelectItem>
-                    <SelectItem value="business-premium">Business Premium - $149.99/month (250/125 Mbps)</SelectItem>
-                    <SelectItem value="ultra">Ultra Plan - $199.99/month (500/250 Mbps)</SelectItem>
-                  </SelectContent>
-                </Select>
+                {loadingPlans ? (
+                  <div className="flex items-center space-x-2 p-3 border rounded-md">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm text-muted-foreground">Loading service plans...</span>
+                  </div>
+                ) : (
+                  <Select name="service_plan" onValueChange={handlePlanSelection}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {servicePlans.map((plan) => (
+                        <SelectItem key={plan.id} value={plan.id.toString()}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{plan.name}</span>
+                            <span className="text-sm text-muted-foreground">
+                              {formatCurrency(plan.price * 100)}/month - {plan.speed}
+                              {plan.fupLimit && ` (${plan.fupLimit}GB FUP)`}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Initial Status</Label>
@@ -919,6 +1035,52 @@ export default function AddCustomerPage() {
               </div>
             </div>
 
+            {selectedPlan && (
+              <Card className="bg-blue-50 border-blue-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg text-blue-900">Selected Plan Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-medium">Plan:</span> {selectedPlan.name}
+                    </div>
+                    <div>
+                      <span className="font-medium">Category:</span> {selectedPlan.category}
+                    </div>
+                    <div>
+                      <span className="font-medium">Speed:</span> {selectedPlan.speed}
+                    </div>
+                    <div>
+                      <span className="font-medium">Monthly Price:</span> {formatCurrency(selectedPlan.price * 100)}
+                    </div>
+                    {selectedPlan.fupLimit && (
+                      <>
+                        <div>
+                          <span className="font-medium">FUP Limit:</span> {selectedPlan.fupLimit}GB
+                        </div>
+                        <div>
+                          <span className="font-medium">After FUP:</span> {selectedPlan.fupSpeed}
+                        </div>
+                      </>
+                    )}
+                    {selectedPlan.setupFee > 0 && (
+                      <div>
+                        <span className="font-medium">Setup Fee:</span> {formatCurrency(selectedPlan.setupFee * 100)}
+                      </div>
+                    )}
+                    <div>
+                      <span className="font-medium">Installation:</span>{" "}
+                      {formatCurrency(selectedPlan.installationFee * 100)}
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-blue-300">
+                    <p className="text-sm text-blue-800">{selectedPlan.description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="installationDate">Preferred Installation Date</Label>
@@ -926,7 +1088,7 @@ export default function AddCustomerPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="billingCycle">Billing Cycle</Label>
-                <Select defaultValue="monthly">
+                <Select defaultValue="monthly" name="billing_cycle">
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -954,6 +1116,145 @@ export default function AddCustomerPage() {
                 <Label htmlFor="smsNotifications">SMS notifications</Label>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Equipment & Inventory Selection section */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Equipment & Inventory Selection
+            </CardTitle>
+            <CardDescription>Select equipment and inventory items needed for installation</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {loadingInventory ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-muted-foreground">Loading inventory items...</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Available Inventory by Category */}
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">Available Equipment</Label>
+                  {Object.entries(itemsByCategory).map(([category, items]) => (
+                    <div key={category} className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{category}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {items.map((item) => (
+                          <Card key={item.id} className="p-4 hover:shadow-md transition-shadow">
+                            <div className="space-y-2">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h5 className="font-medium text-sm">{item.name}</h5>
+                                  <p className="text-xs text-muted-foreground">{item.sku}</p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => addInventoryItem(item)}
+                                  disabled={item.stockQuantity <= 0}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add
+                                </Button>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-xs">
+                                  <span>Price:</span>
+                                  <span className="font-medium">{formatCurrency(item.unitCost)}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span>Stock:</span>
+                                  <span className={item.stockQuantity <= 5 ? "text-orange-600" : "text-green-600"}>
+                                    {item.stockQuantity} available
+                                  </span>
+                                </div>
+                                {item.description && (
+                                  <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Selected Items Summary */}
+                {selectedItems.length > 0 && (
+                  <Card className="bg-green-50 border-green-200">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg text-green-900 flex items-center gap-2">
+                        <Package className="h-5 w-5" />
+                        Selected Equipment ({selectedItems.length} items)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {selectedItems.map((selected) => (
+                        <div
+                          key={selected.id}
+                          className="flex items-center justify-between p-3 bg-white rounded-lg border"
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">{selected.item.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {selected.item.sku} • {formatCurrency(selected.item.unitCost)} each
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateItemQuantity(selected.id, selected.quantity - 1)}
+                            >
+                              -
+                            </Button>
+                            <span className="w-8 text-center text-sm font-medium">{selected.quantity}</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateItemQuantity(selected.id, selected.quantity + 1)}
+                              disabled={selected.quantity >= selected.item.stockQuantity}
+                            >
+                              +
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => removeInventoryItem(selected.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <div className="text-right ml-4">
+                            <div className="font-medium text-sm">
+                              {formatCurrency(selected.item.unitCost * selected.quantity)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="border-t pt-3 flex justify-between items-center">
+                        <span className="font-medium">Total Equipment Cost:</span>
+                        <span className="text-lg font-bold text-green-700">
+                          {formatCurrency(getTotalInventoryCost())}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -993,6 +1294,7 @@ export default function AddCustomerPage() {
                     <SelectItem value="router-modem">Router + Modem</SelectItem>
                     <SelectItem value="full-package">Full Package (Router, Modem, Cables)</SelectItem>
                     <SelectItem value="customer-provided">Customer Provided</SelectItem>
+                    <SelectItem value="custom-selection">Custom Selection (see above)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1103,8 +1405,8 @@ export default function AddCustomerPage() {
           <Button type="button" variant="outline" asChild>
             <Link href="/customers">Cancel</Link>
           </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "Adding Customer..." : "Add Customer"}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Adding Customer..." : "Add Customer"}
           </Button>
         </div>
       </form>

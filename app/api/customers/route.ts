@@ -65,6 +65,12 @@ export async function POST(request: Request) {
       ? Number.parseInt(formData.get("assigned_staff") as string)
       : null
 
+    // Additional information fields
+    const salesRep = formData.get("sales_rep") as string
+    const accountManager = formData.get("account_manager") as string
+    const specialRequirements = formData.get("special_requirements") as string
+    const internalNotes = formData.get("internal_notes") as string
+
     // Service preferences
     const servicePreferences = {
       auto_renewal: formData.get("auto_renewal") === "on",
@@ -74,8 +80,8 @@ export async function POST(request: Request) {
       equipment_needed: formData.get("equipment_needed"),
       installation_date: formData.get("installation_date"),
       billing_cycle: formData.get("billing_cycle"),
-      special_requirements: formData.get("special_requirements"),
-      internal_notes: formData.get("internal_notes"),
+      sales_rep: salesRep,
+      account_manager: accountManager,
     }
 
     // Generate unique account number
@@ -90,6 +96,7 @@ export async function POST(request: Request) {
         billing_address, installation_address, gps_coordinates, portal_username, portal_password,
         preferred_contact_method, referral_source, assigned_staff_id, service_preferences,
         account_number, status, customer_type, id_number, tax_number, business_name, business_type,
+        special_requirements, internal_notes, sales_rep, account_manager,
         created_at, updated_at
       )
       VALUES (
@@ -98,6 +105,7 @@ export async function POST(request: Request) {
         ${portalUsername}, ${portalPassword}, ${preferredContactMethod}, ${referralSource}, 
         ${assignedStaffId}, ${JSON.stringify(servicePreferences)}, ${accountNumber}, 'pending',
         ${customerType}, ${idNumber}, ${taxNumber}, ${businessName}, ${businessType},
+        ${specialRequirements}, ${internalNotes}, ${salesRep}, ${accountManager},
         NOW(), NOW()
       )
       RETURNING *

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { CheckCircle, Building, User, Database } from "lucide-react"
+import { CheckCircle, Building, User, Database, Users, CreditCard, Network, Settings } from "lucide-react"
 
 export default function SetupPage() {
   const [currentStep, setCurrentStep] = useState(1)
@@ -105,20 +105,31 @@ export default function SetupPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("/api/execute-migration", {
+      const dbResponse = await fetch("/api/setup/database", {
         method: "POST",
       })
 
-      if (response.ok) {
-        toast({ title: "Database setup completed successfully!" })
+      if (!dbResponse.ok) {
+        throw new Error("Database setup failed")
+      }
+
+      const migrationResponse = await fetch("/api/execute-migration", {
+        method: "POST",
+      })
+
+      if (migrationResponse.ok) {
+        toast({
+          title: "Database setup completed successfully!",
+          description: "All tables created and sample data inserted.",
+        })
         setCurrentStep(4)
       } else {
-        throw new Error("Database setup failed")
+        throw new Error("Migration failed")
       }
     } catch (error) {
       toast({
         title: "Database setup failed",
-        description: "Please check your database connection.",
+        description: "Please check your database connection and try again.",
         variant: "destructive",
       })
     } finally {
@@ -134,7 +145,6 @@ export default function SetupPage() {
           <p className="text-gray-600">Complete the initial configuration to get started</p>
         </div>
 
-        {/* Progress Steps */}
         <div className="flex justify-center mb-8">
           <div className="flex items-center space-x-4">
             {[1, 2, 3, 4].map((step) => (
@@ -152,7 +162,6 @@ export default function SetupPage() {
           </div>
         </div>
 
-        {/* Step 1: Company Information */}
         {currentStep === 1 && (
           <Card>
             <CardHeader>
@@ -254,7 +263,6 @@ export default function SetupPage() {
           </Card>
         )}
 
-        {/* Step 2: Admin Account */}
         {currentStep === 2 && (
           <Card>
             <CardHeader>
@@ -340,7 +348,6 @@ export default function SetupPage() {
           </Card>
         )}
 
-        {/* Step 3: Database Setup */}
         {currentStep === 3 && (
           <Card>
             <CardHeader>
@@ -348,20 +355,34 @@ export default function SetupPage() {
                 <Database className="w-5 h-5" />
                 Database Setup
               </CardTitle>
-              <CardDescription>Initialize the database with required tables and data</CardDescription>
+              <CardDescription>Initialize the database with required tables and sample data</CardDescription>
             </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <p className="text-gray-600">
-                Click the button below to create all necessary database tables and initial data.
-              </p>
-              <Button onClick={handleDatabaseSetup} disabled={isLoading} size="lg">
-                {isLoading ? "Setting up Database..." : "Setup Database"}
-              </Button>
+            <CardContent className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">What will be created:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Customer management tables</li>
+                  <li>• Service plans and billing tables</li>
+                  <li>• Network devices and IP management</li>
+                  <li>• Employee and HR management</li>
+                  <li>• Support ticket system</li>
+                  <li>• Financial and inventory management</li>
+                  <li>• Sample data for testing</li>
+                </ul>
+              </div>
+
+              <div className="text-center">
+                <p className="text-gray-600 mb-4">
+                  This will create all necessary database tables and insert sample data to get you started.
+                </p>
+                <Button onClick={handleDatabaseSetup} disabled={isLoading} size="lg">
+                  {isLoading ? "Setting up Database..." : "Initialize Database & Sample Data"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Step 4: Complete */}
         {currentStep === 4 && (
           <Card>
             <CardHeader>
@@ -371,19 +392,66 @@ export default function SetupPage() {
               </CardTitle>
               <CardDescription>Your ISP Management System is ready to use</CardDescription>
             </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <div className="text-green-600 mb-4">
-                <CheckCircle className="w-16 h-16 mx-auto" />
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <div className="text-green-600 mb-4">
+                  <CheckCircle className="w-16 h-16 mx-auto" />
+                </div>
+                <p className="text-gray-600 mb-6">
+                  Congratulations! Your ISP Management System has been successfully configured with sample data.
+                </p>
               </div>
-              <p className="text-gray-600 mb-6">
-                Congratulations! Your ISP Management System has been successfully configured.
-              </p>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">🚀 Quick Start Guide:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-600" />
+                    <span>
+                      Manage customers at <strong>/customers</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-green-600" />
+                    <span>
+                      Create service plans at <strong>/services</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Network className="w-4 h-4 text-purple-600" />
+                    <span>
+                      Network management at <strong>/network</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-orange-600" />
+                    <span>
+                      System settings at <strong>/settings</strong>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h4 className="font-medium text-yellow-900 mb-2">📋 Next Steps:</h4>
+                <ul className="text-sm text-yellow-800 space-y-1">
+                  <li>1. Review and update company settings</li>
+                  <li>2. Add your service plans and pricing</li>
+                  <li>3. Configure network devices and IP ranges</li>
+                  <li>4. Set up email notifications</li>
+                  <li>5. Train staff on system usage</li>
+                </ul>
+              </div>
+
               <div className="space-y-2">
                 <Button asChild className="w-full">
                   <a href="/">Go to Dashboard</a>
                 </Button>
                 <Button variant="outline" asChild className="w-full bg-transparent">
                   <a href="/settings">Configure Additional Settings</a>
+                </Button>
+                <Button variant="ghost" asChild className="w-full">
+                  <a href="/customers">View Sample Customers</a>
                 </Button>
               </div>
             </CardContent>

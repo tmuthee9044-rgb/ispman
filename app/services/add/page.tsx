@@ -120,8 +120,17 @@ export default function AddServicePage() {
     concurrentConnections: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!basicInfo.planName || !basicInfo.serviceType || !pricingConfig.monthlyPrice) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (Plan Name, Service Type, Monthly Price).",
+        variant: "destructive",
+      })
+      return
+    }
 
     const serviceData = {
       basic: basicInfo,
@@ -133,12 +142,56 @@ export default function AddServicePage() {
       restrictions: restrictions,
     }
 
-    console.log("Service Configuration:", serviceData)
+    console.log("[v0] Submitting service configuration:", serviceData)
 
-    toast({
-      title: "Service Plan Created",
-      description: `${basicInfo.planName} has been successfully created with comprehensive configuration.`,
-    })
+    try {
+      const response = await fetch("/api/services", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(serviceData),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: "Service Plan Created",
+          description: `${basicInfo.planName} has been successfully saved to the database.`,
+        })
+
+        setBasicInfo({
+          planName: "",
+          description: "",
+          serviceType: "",
+          category: "",
+          status: "active",
+        })
+        setPricingConfig({
+          monthlyPrice: "",
+          setupFee: "",
+          billingCycle: "",
+          contractLength: "",
+          promoPrice: "",
+          promoEnabled: false,
+          promoDuration: "",
+          currency: "USD",
+          taxIncluded: false,
+          taxRate: [16],
+        })
+        setActiveTab("basic")
+      } else {
+        throw new Error(result.message || "Failed to create service plan")
+      }
+    } catch (error) {
+      console.error("[v0] Error creating service plan:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create service plan. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const serviceTypes = [

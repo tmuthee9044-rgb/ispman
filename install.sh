@@ -167,6 +167,7 @@ setup_database() {
         print_status "The database will be initialized when you complete the setup at /setup"
     else
         print_success "Database connection configured"
+        print_status "Database tables will be created during the setup process"
     fi
 }
 
@@ -178,22 +179,39 @@ start_server() {
     echo "🎉 Installation Complete!"
     echo "========================"
     echo ""
-    echo "To start the development server, run:"
+    echo "📋 Next Steps:"
+    echo "1. Start the development server:"
     if command -v bun &> /dev/null; then
-        echo "  bun dev"
+        echo "   bun dev"
     elif command -v yarn &> /dev/null; then
-        echo "  yarn dev"
+        echo "   yarn dev"
     else
-        echo "  npm run dev"
+        echo "   npm run dev"
     fi
     echo ""
-    echo "Then visit: http://localhost:3000/setup"
-    echo "Complete the initial setup to configure your ISP system"
+    echo "2. Visit: http://localhost:3000/setup"
+    echo "   - Complete the initial setup wizard"
+    echo "   - Configure company information"
+    echo "   - Create admin account"
+    echo "   - Initialize database tables with sample data"
     echo ""
-    echo "⚠️  Make sure to:"
-    echo "1. Connect your Neon database in Project Settings"
-    echo "2. Complete the setup wizard at /setup"
-    echo "3. Change default passwords in production"
+    echo "3. After setup, access the system at: http://localhost:3000"
+    echo "   - Login with your admin credentials"
+    echo "   - Follow the guided tour for system navigation"
+    echo ""
+    echo "🔧 System Features:"
+    echo "   • Customer Management & Portal"
+    echo "   • Service Plans & Billing"
+    echo "   • Network Management & Monitoring"
+    echo "   • HR & Employee Management"
+    echo "   • Financial Management & Reporting"
+    echo "   • Support Ticket System"
+    echo ""
+    echo "⚠️  Important:"
+    echo "   • Ensure Neon database is connected in Project Settings"
+    echo "   • Change default passwords in production"
+    echo "   • Configure email settings for notifications"
+    echo "   • Set up backup procedures"
 }
 
 # Main installation process

@@ -13,24 +13,57 @@ import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Wifi, Mail, Lock, Eye, EyeOff, Phone, User, AlertCircle, ArrowRight, Shield } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 export default function PortalLoginPage() {
+  const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [loginMethod, setLoginMethod] = useState("email")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [formData, setFormData] = useState({
+    loginId: "",
+    password: "",
+    rememberMe: false,
+  })
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    setError("") // Clear error when user types
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
 
-    // Simulate login process
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/portal/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loginId: formData.loginId,
+          password: formData.password,
+          loginMethod,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        // Successful login - redirect to customer portal
+        router.push(data.redirectUrl || "/portal/dashboard")
+      } else {
+        setError(data.error || "Login failed. Please try again.")
+      }
+    } catch (error) {
+      console.error("[v0] Login error:", error)
+      setError("Network error. Please check your connection and try again.")
+    } finally {
       setIsLoading(false)
-      // Redirect to dashboard would happen here
-      window.location.href = "/portal/dashboard"
-    }, 2000)
+    }
   }
 
   const handleForgotPassword = () => {
@@ -75,17 +108,33 @@ export default function PortalLoginPage() {
                     <Label htmlFor="email">Email Address</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input id="email" type="email" placeholder="your.email@example.com" className="pl-10" required />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="your.email@example.com"
+                        className="pl-10"
+                        value={formData.loginId}
+                        onChange={(e) => handleInputChange("loginId", e.target.value)}
+                        required
+                      />
                     </div>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="account" className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="account">Account Number</Label>
+                    <Label htmlFor="account">Account Number / Username</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                      <Input id="account" type="text" placeholder="ACC-123456" className="pl-10" required />
+                      <Input
+                        id="account"
+                        type="text"
+                        placeholder="TW123456 or username"
+                        className="pl-10"
+                        value={formData.loginId}
+                        onChange={(e) => handleInputChange("loginId", e.target.value)}
+                        required
+                      />
                     </div>
                   </div>
                 </TabsContent>
@@ -99,6 +148,8 @@ export default function PortalLoginPage() {
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
                       className="pl-10 pr-10"
+                      value={formData.password}
+                      onChange={(e) => handleInputChange("password", e.target.value)}
                       required
                     />
                     <button
@@ -113,7 +164,11 @@ export default function PortalLoginPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="remember" />
+                    <Checkbox
+                      id="remember"
+                      checked={formData.rememberMe}
+                      onCheckedChange={(checked) => handleInputChange("rememberMe", checked as boolean)}
+                    />
                     <Label htmlFor="remember" className="text-sm">
                       Remember me
                     </Label>

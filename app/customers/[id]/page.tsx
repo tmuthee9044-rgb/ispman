@@ -41,7 +41,10 @@ const getCustomerData = async (id: string) => {
     const transformedCustomer = {
       id: customer.id,
       name: `${customer.name || "Unknown"} ${customer.last_name || ""}`.trim(),
+      first_name: customer.name || "",
+      last_name: customer.last_name || "",
       email: customer.email || "",
+      alternate_email: customer.alternate_email || "",
       phone: customer.phone || customer.phone_primary || "",
       address: customer.physical_address || customer.address || "",
       status: (customer.status || "active") as "active" | "suspended" | "inactive",
@@ -49,23 +52,82 @@ const getCustomerData = async (id: string) => {
       monthly_fee: Number(customer.monthly_fee) || 2500,
       created_at: customer.created_at,
       updated_at: customer.updated_at,
+
+      // Personal Information
+      date_of_birth: customer.date_of_birth || "",
+      gender: customer.gender || "",
+      national_id: customer.national_id || "",
+
+      // Business Information
+      customer_type: (customer.customer_type || "individual") as const,
+      contact_person: customer.contact_person || "",
+      vat_pin: customer.vat_pin || "",
+      tax_id: customer.tax_id || "",
+      business_reg_no: customer.business_reg_no || "",
+      business_type: customer.business_type || "",
+      industry: customer.industry || "",
+      company_size: customer.company_size || "",
+      school_type: customer.school_type || "",
+      student_count: customer.student_count || "",
+      staff_count: customer.staff_count || "",
+
+      // Address Information
+      physical_address: customer.physical_address || "",
+      physical_city: customer.physical_city || "",
+      physical_county: customer.physical_county || "",
+      physical_postal_code: customer.physical_postal_code || "",
+      physical_country: customer.physical_country || "Kenya",
+      physical_gps_lat: customer.physical_gps_lat || "",
+      physical_gps_lng: customer.physical_gps_lng || "",
+
+      billing_address: customer.billing_address || customer.physical_address || "",
+      billing_city: customer.billing_city || customer.physical_city || "",
+      billing_county: customer.billing_county || customer.physical_county || "",
+      billing_postal_code: customer.billing_postal_code || customer.physical_postal_code || "",
+      billing_country: customer.billing_country || customer.physical_country || "Kenya",
+      billing_gps_lat: customer.billing_gps_lat || customer.physical_gps_lat || "",
+      billing_gps_lng: customer.billing_gps_lng || customer.physical_gps_lng || "",
+
+      // Portal Access
+      portal_login_id: customer.portal_login_id || `TW${customer.id}`,
+      portal_username: customer.portal_username || `customer_${customer.id}`,
+      portal_password: customer.portal_password || "••••••••••••",
+
+      // Service Configuration
       connection_type: customer.connection_type || "Fiber",
       router_ip: customer.ip_allocated || "192.168.1.100",
-      mac_address: "00:1B:44:11:3A:B7",
+      mac_address: customer.mac_address || "00:1B:44:11:3A:B7",
       installation_date: customer.installation_date || formatDate(customer.created_at),
       last_payment: customer.last_payment_date || "2024-01-01",
       balance: Number(customer.balance) || 0,
-      notes: customer.internal_notes || `Customer created on ${new Date(customer.created_at).toLocaleDateString()}`,
-      portal_login_id:
-        customer.portal_login_id || `${customer.name?.toLowerCase().replace(/\s+/g, "_")}_${customer.id}`,
-      portal_username: customer.portal_username || customer.name?.toLowerCase().replace(/\s+/g, ""),
-      portal_password: customer.portal_password || "temp_password_123",
-      router_allocated: customer.router_allocated ? "Router-A-001" : "Not Allocated",
-      ip_allocated: customer.ip_allocated || "192.168.1.100",
-      customer_type: (customer.customer_type || "individual") as const,
       payment_method: customer.payment_method || "mpesa",
       auto_payment: customer.auto_renewal || true,
       connection_quality: customer.connection_quality || "excellent",
+      billing_cycle: customer.billing_cycle || "monthly",
+
+      // Technical Information
+      equipment_needed: customer.equipment_needed || "",
+      installation_notes: customer.installation_notes || "",
+      technical_contact: customer.technical_contact || "",
+
+      // Additional Information
+      referral_source: customer.referral_source || "",
+      special_requirements: customer.special_requirements || "",
+      sales_rep: customer.sales_rep || "",
+      account_manager: customer.account_manager || "",
+
+      // Contact Numbers and Emergency Contacts (JSON fields)
+      phone_numbers: customer.phone_numbers ? JSON.parse(customer.phone_numbers) : [],
+      emergency_contacts: customer.emergency_contacts ? JSON.parse(customer.emergency_contacts) : [],
+
+      // Preferences
+      auto_renewal: customer.auto_renewal || false,
+      paperless_billing: customer.paperless_billing || false,
+      sms_notifications: customer.sms_notifications || false,
+
+      notes: customer.internal_notes || `Customer created on ${new Date(customer.created_at).toLocaleDateString()}`,
+      router_allocated: customer.router_allocated ? "Router-A-001" : "Not Allocated",
+      ip_allocated: customer.ip_allocated || "192.168.1.100",
     }
 
     return transformedCustomer

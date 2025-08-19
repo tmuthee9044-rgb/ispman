@@ -81,6 +81,31 @@ interface Customer {
   vat_pin?: string
   business_reg_no?: string
   last_name?: string
+  first_name?: string
+  alternate_email?: string
+  date_of_birth?: string
+  gender?: string
+  contact_person?: string
+  tax_id?: string
+  business_type?: string
+  industry?: string
+  company_size?: string
+  school_type?: string
+  student_count?: string
+  staff_count?: string
+  physical_address?: string
+  physical_gps_lat?: string
+  physical_gps_lng?: string
+  phone_numbers?: any[]
+  emergency_contacts?: any[]
+  auto_renewal?: boolean
+  paperless_billing?: boolean
+  sms_notifications?: boolean
+  billing_cycle?: string
+  referral_source?: string
+  special_requirements?: string
+  sales_rep?: string
+  account_manager?: string
 }
 
 interface CustomerDetailsClientProps {
@@ -127,13 +152,135 @@ function PaymentModal({ open, onOpenChange, customerId, customerName, currentBal
 }
 
 function EditCustomerModal({ open, onOpenChange, customer }: any) {
+  const [editedCustomer, setEditedCustomer] = useState(customer)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSave = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/customers/${customer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editedCustomer),
+      })
+
+      if (response.ok) {
+        toast.success("Customer updated successfully")
+        onOpenChange(false)
+        window.location.reload()
+      } else {
+        toast.error("Failed to update customer")
+      }
+    } catch (error) {
+      toast.error("Error updating customer")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (!open) return null
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+      <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">Edit Customer</h2>
-        <p className="text-muted-foreground mb-4">Edit details for {customer?.name}</p>
-        <Button onClick={() => onOpenChange(false)}>Close</Button>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>First Name</Label>
+              <Input
+                value={editedCustomer.first_name || editedCustomer.name?.split(" ")[0] || ""}
+                onChange={(e) =>
+                  setEditedCustomer({
+                    ...editedCustomer,
+                    first_name: e.target.value,
+                    name: `${e.target.value} ${editedCustomer.last_name || editedCustomer.name?.split(" ")[1] || ""}`,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Last Name</Label>
+              <Input
+                value={editedCustomer.last_name || editedCustomer.name?.split(" ")[1] || ""}
+                onChange={(e) =>
+                  setEditedCustomer({
+                    ...editedCustomer,
+                    last_name: e.target.value,
+                    name: `${editedCustomer.first_name || editedCustomer.name?.split(" ")[0] || ""} ${e.target.value}`,
+                  })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={editedCustomer.email || ""}
+                onChange={(e) => setEditedCustomer({ ...editedCustomer, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input
+                value={editedCustomer.phone || ""}
+                onChange={(e) => setEditedCustomer({ ...editedCustomer, phone: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Address</Label>
+            <textarea
+              className="w-full p-2 border rounded-md"
+              rows={3}
+              value={editedCustomer.physical_address || editedCustomer.address || ""}
+              onChange={(e) =>
+                setEditedCustomer({ ...editedCustomer, physical_address: e.target.value, address: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Customer Type</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={editedCustomer.customer_type || "individual"}
+                onChange={(e) => setEditedCustomer({ ...editedCustomer, customer_type: e.target.value })}
+              >
+                <option value="individual">Individual</option>
+                <option value="company">Company</option>
+                <option value="school">School</option>
+              </select>
+            </div>
+            <div>
+              <Label>Status</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={editedCustomer.status || "active"}
+                onChange={(e) => setEditedCustomer({ ...editedCustomer, status: e.target.value })}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isLoading}>
+            {isLoading ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -953,22 +1100,26 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                 <CardHeader>
                   <CardTitle>Personal Information</CardTitle>
                 </CardHeader>
+
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>First Name</Label>
                       {editingInfo ? (
                         <Input
-                          value={editedCustomer.name?.split(" ")[0] || ""}
+                          value={editedCustomer.first_name || editedCustomer.name?.split(" ")[0] || ""}
                           onChange={(e) =>
                             setEditedCustomer({
                               ...editedCustomer,
-                              name: `${e.target.value} ${editedCustomer.name?.split(" ")[1] || ""}`,
+                              first_name: e.target.value,
+                              name: `${e.target.value} ${editedCustomer.last_name || editedCustomer.name?.split(" ")[1] || ""}`,
                             })
                           }
                         />
                       ) : (
-                        <div className="font-medium">{customer.name?.split(" ")[0] || "N/A"}</div>
+                        <div className="font-medium">
+                          {customer.first_name || customer.name?.split(" ")[0] || "N/A"}
+                        </div>
                       )}
                     </div>
                     <div>
@@ -980,6 +1131,7 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                             setEditedCustomer({
                               ...editedCustomer,
                               last_name: e.target.value,
+                              name: `${editedCustomer.first_name || editedCustomer.name?.split(" ")[0] || ""} ${e.target.value}`,
                             })
                           }
                         />
@@ -989,57 +1141,139 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     </div>
                   </div>
 
-                  <div>
-                    <Label>Email</Label>
-                    {editingInfo ? (
-                      <Input
-                        type="email"
-                        value={editedCustomer.email || ""}
-                        onChange={(e) =>
-                          setEditedCustomer({
-                            ...editedCustomer,
-                            email: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      <div className="font-medium">{customer.email}</div>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Email</Label>
+                      {editingInfo ? (
+                        <Input
+                          type="email"
+                          value={editedCustomer.email || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              email: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.email}</div>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Alternate Email</Label>
+                      {editingInfo ? (
+                        <Input
+                          type="email"
+                          value={editedCustomer.alternate_email || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              alternate_email: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.alternate_email || "N/A"}</div>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <Label>Phone</Label>
-                    {editingInfo ? (
-                      <Input
-                        value={editedCustomer.phone || ""}
-                        onChange={(e) =>
-                          setEditedCustomer({
-                            ...editedCustomer,
-                            phone: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      <div className="font-medium">{customer.phone}</div>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Primary Phone</Label>
+                      {editingInfo ? (
+                        <Input
+                          value={editedCustomer.phone || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              phone: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.phone}</div>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Date of Birth</Label>
+                      {editingInfo ? (
+                        <Input
+                          type="date"
+                          value={editedCustomer.date_of_birth || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              date_of_birth: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.date_of_birth || "N/A"}</div>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <Label>National ID</Label>
-                    {editingInfo ? (
-                      <Input
-                        value={editedCustomer.national_id || ""}
-                        onChange={(e) =>
-                          setEditedCustomer({
-                            ...editedCustomer,
-                            national_id: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      <div className="font-medium">{customer.national_id || "N/A"}</div>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Gender</Label>
+                      {editingInfo ? (
+                        <select
+                          className="w-full p-2 border rounded-md"
+                          value={editedCustomer.gender || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              gender: e.target.value,
+                            })
+                          }
+                        >
+                          <option value="">Select Gender</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                          <option value="prefer-not-to-say">Prefer not to say</option>
+                        </select>
+                      ) : (
+                        <div className="font-medium capitalize">{customer.gender || "N/A"}</div>
+                      )}
+                    </div>
+                    <div>
+                      <Label>National ID/Passport</Label>
+                      {editingInfo ? (
+                        <Input
+                          value={editedCustomer.national_id || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              national_id: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.national_id || "N/A"}</div>
+                      )}
+                    </div>
                   </div>
+
+                  {customer.customer_type !== "individual" && (
+                    <div>
+                      <Label>Contact Person</Label>
+                      {editingInfo ? (
+                        <Input
+                          value={editedCustomer.contact_person || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              contact_person: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.contact_person || "N/A"}</div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1070,21 +1304,39 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     )}
                   </div>
 
-                  <div>
-                    <Label>VAT PIN</Label>
-                    {editingInfo ? (
-                      <Input
-                        value={editedCustomer.vat_pin || ""}
-                        onChange={(e) =>
-                          setEditedCustomer({
-                            ...editedCustomer,
-                            vat_pin: e.target.value,
-                          })
-                        }
-                      />
-                    ) : (
-                      <div className="font-medium">{customer.vat_pin || "N/A"}</div>
-                    )}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>VAT PIN</Label>
+                      {editingInfo ? (
+                        <Input
+                          value={editedCustomer.vat_pin || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              vat_pin: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.vat_pin || "N/A"}</div>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Tax ID</Label>
+                      {editingInfo ? (
+                        <Input
+                          value={editedCustomer.tax_id || ""}
+                          onChange={(e) =>
+                            setEditedCustomer({
+                              ...editedCustomer,
+                              tax_id: e.target.value,
+                            })
+                          }
+                        />
+                      ) : (
+                        <div className="font-medium">{customer.tax_id || "N/A"}</div>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -1104,24 +1356,173 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     )}
                   </div>
 
+                  {customer.customer_type === "company" && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Business Type</Label>
+                          <div className="font-medium">{customer.business_type || "N/A"}</div>
+                        </div>
+                        <div>
+                          <Label>Industry</Label>
+                          <div className="font-medium">{customer.industry || "N/A"}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Company Size</Label>
+                        <div className="font-medium">{customer.company_size || "N/A"}</div>
+                      </div>
+                    </>
+                  )}
+
+                  {customer.customer_type === "school" && (
+                    <>
+                      <div>
+                        <Label>School Type</Label>
+                        <div className="font-medium">{customer.school_type || "N/A"}</div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Number of Students</Label>
+                          <div className="font-medium">{customer.student_count || "N/A"}</div>
+                        </div>
+                        <div>
+                          <Label>Number of Staff</Label>
+                          <div className="font-medium">{customer.staff_count || "N/A"}</div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   <div>
-                    <Label>Address</Label>
+                    <Label>Physical Address</Label>
                     {editingInfo ? (
                       <textarea
                         className="w-full p-2 border rounded-md"
                         rows={3}
-                        value={editedCustomer.address || ""}
+                        value={editedCustomer.physical_address || ""}
                         onChange={(e) =>
                           setEditedCustomer({
                             ...editedCustomer,
-                            address: e.target.value,
+                            physical_address: e.target.value,
                           })
                         }
                       />
                     ) : (
-                      <div className="font-medium">{customer.address}</div>
+                      <div className="font-medium">{customer.physical_address || customer.address || "N/A"}</div>
                     )}
                   </div>
+
+                  {(customer.physical_gps_lat || customer.physical_gps_lng) && (
+                    <div>
+                      <Label>GPS Coordinates</Label>
+                      <div className="font-medium">
+                        {customer.physical_gps_lat}, {customer.physical_gps_lng}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium mb-2">Portal Access</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Portal Login ID</Label>
+                        <div className="font-medium font-mono">{customer.portal_login_id || "N/A"}</div>
+                      </div>
+                      <div>
+                        <Label>Portal Username</Label>
+                        <div className="font-medium font-mono">{customer.portal_username || "N/A"}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {customer.phone_numbers && customer.phone_numbers.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium mb-2">Additional Phone Numbers</h4>
+                      <div className="space-y-2">
+                        {customer.phone_numbers.map((phone: any, index: number) => (
+                          <div key={index} className="flex justify-between">
+                            <span className="font-medium">{phone.number}</span>
+                            <span className="text-sm text-muted-foreground capitalize">
+                              {phone.type} {phone.isPrimary && "(Primary)"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {customer.emergency_contacts && customer.emergency_contacts.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium mb-2">Emergency Contacts</h4>
+                      <div className="space-y-2">
+                        {customer.emergency_contacts.map((contact: any, index: number) => (
+                          <div key={index} className="grid grid-cols-3 gap-2 text-sm">
+                            <span className="font-medium">{contact.name}</span>
+                            <span>{contact.phone}</span>
+                            <span className="text-muted-foreground capitalize">{contact.relationship}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t pt-4">
+                    <h4 className="font-medium mb-2">Service Preferences</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <Label>Auto Renewal</Label>
+                        <div className="font-medium">{customer.auto_renewal ? "Enabled" : "Disabled"}</div>
+                      </div>
+                      <div>
+                        <Label>Paperless Billing</Label>
+                        <div className="font-medium">{customer.paperless_billing ? "Enabled" : "Disabled"}</div>
+                      </div>
+                      <div>
+                        <Label>SMS Notifications</Label>
+                        <div className="font-medium">{customer.sms_notifications ? "Enabled" : "Disabled"}</div>
+                      </div>
+                      <div>
+                        <Label>Billing Cycle</Label>
+                        <div className="font-medium capitalize">{customer.billing_cycle || "Monthly"}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {(customer.referral_source ||
+                    customer.special_requirements ||
+                    customer.sales_rep ||
+                    customer.account_manager) && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-medium mb-2">Additional Information</h4>
+                      <div className="space-y-2 text-sm">
+                        {customer.referral_source && (
+                          <div>
+                            <Label>Referral Source</Label>
+                            <div className="font-medium capitalize">{customer.referral_source}</div>
+                          </div>
+                        )}
+                        {customer.sales_rep && (
+                          <div>
+                            <Label>Sales Representative</Label>
+                            <div className="font-medium">{customer.sales_rep}</div>
+                          </div>
+                        )}
+                        {customer.account_manager && (
+                          <div>
+                            <Label>Account Manager</Label>
+                            <div className="font-medium">{customer.account_manager}</div>
+                          </div>
+                        )}
+                        {customer.special_requirements && (
+                          <div>
+                            <Label>Special Requirements</Label>
+                            <div className="font-medium">{customer.special_requirements}</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

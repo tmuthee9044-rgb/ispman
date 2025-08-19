@@ -43,9 +43,6 @@ import {
   CheckCircle2,
   BookmarkPlus,
   SlidersHorizontal,
-  Database,
-  FileText,
-  Settings,
 } from "lucide-react"
 
 interface EnhancedFilters {
@@ -104,6 +101,7 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showIspToolsModal, setShowIspToolsModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   const [filters, setFilters] = useState<EnhancedFilters>({
     status: "all",
@@ -382,168 +380,50 @@ export default function CustomersPage() {
     }
   }
 
-  const handleBulkImport = (systemType: "auto" | "splynx" | "mikrotik" | "radius" | "csv" = "auto") => {
+  const handleBulkImport = async () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = systemType === "radius" ? ".txt" : systemType === "mikrotik" ? ".json" : ".csv"
+    input.accept = ".csv,.json,.txt"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
 
       try {
-        const text = await file.text()
-        let importData: any[] = []
-
-        // Auto-detect format or use specified format
-        if (systemType === "auto") {
-          if (file.name.toLowerCase().includes("splynx") || text.includes("tariff_name")) {
-            systemType = "splynx"
-          } else if (file.name.toLowerCase().includes("mikrotik") || text.startsWith("[") || text.startsWith("{")) {
-            systemType = "mikrotik"
-          } else if (file.name.toLowerCase().includes("radius") || text.includes("Cleartext-Password")) {
-            systemType = "radius"
-          } else {
-            systemType = "csv"
-          }
-        }
-
-        switch (systemType) {
-          case "splynx":
-            const splynxLines = text.split("\n").filter((line) => line.trim())
-            if (splynxLines.length < 2) throw new Error("Invalid Splynx format")
-
-            const splynxHeaders = splynxLines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
-            const splynxDataRows = splynxLines.slice(1)
-
-            importData = splynxDataRows.map((row) => {
-              const values = row.split(",").map((v) => v.trim().replace(/"/g, ""))
-              return {
-                name: values[splynxHeaders.indexOf("name")] || "",
-                email: values[splynxHeaders.indexOf("email")] || "",
-                phone: values[splynxHeaders.indexOf("phone")] || "",
-                status: values[splynxHeaders.indexOf("status")] === "active" ? "active" : "inactive",
-                plan: values[splynxHeaders.indexOf("tariff_name")] || "",
-                monthly_fee: Number.parseFloat(values[splynxHeaders.indexOf("tariff_price")]) || 0,
-                balance: Number.parseFloat(values[splynxHeaders.indexOf("deposit")]) || 0,
-                physical_address: values[splynxHeaders.indexOf("street_1")] || "",
-                physical_city: values[splynxHeaders.indexOf("city")] || "",
-                postal_code: values[splynxHeaders.indexOf("zip_code")] || "",
-                customer_type: "individual",
-              }
-            })
-            break
-
-          case "mikrotik":
-            const mikrotikData = JSON.parse(text)
-            importData = mikrotikData.map((user: any) => ({
-              name: user["full-name"] || user.username,
-              email: user.email || "",
-              phone: user.phone || "",
-              status: user.disabled === "yes" ? "inactive" : "active",
-              plan: user.profile || user["actual-profile"] || "",
-              physical_address: user.address || "",
-              customer_type: "individual",
-            }))
-            break
-
-          case "radius":
-            const radiusLines = text.split("\n").filter((line) => line.trim() && !line.startsWith("\t"))
-            importData = radiusLines.map((line) => {
-              const username = line.split("\t")[0]
-              const isEmail = username.includes("@")
-              return {
-                name: username,
-                email: isEmail ? username : "",
-                phone: !isEmail ? username : "",
-                status: "active",
-                customer_type: "individual",
-              }
-            })
-            break
-
-          default:
-            // Standard CSV processing
-            const lines = text.split("\n").filter((line) => line.trim())
-            if (lines.length < 2) throw new Error("Invalid CSV format")
-
-            const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
-            const dataRows = lines.slice(1)
-
-            importData = dataRows.map((row) => {
-              const values = row.split(",").map((v) => v.trim().replace(/"/g, ""))
-              const customer: any = {}
-
-              headers.forEach((header, index) => {
-                const value = values[index] || ""
-                switch (header.toLowerCase()) {
-                  case "name":
-                    customer.name = value
-                    break
-                  case "last name":
-                    customer.last_name = value
-                    break
-                  case "email":
-                    customer.email = value
-                    break
-                  case "phone":
-                    customer.phone = value
-                    break
-                  case "customer type":
-                    customer.customer_type = value
-                    break
-                  case "status":
-                    customer.status = value || "active"
-                    break
-                  case "monthly fee (kes)":
-                    customer.monthly_fee = Number.parseFloat(value) || 0
-                    break
-                  case "balance (kes)":
-                    customer.balance = Number.parseFloat(value) || 0
-                    break
-                  case "address":
-                    customer.physical_address = value
-                    break
-                  case "city":
-                    customer.physical_city = value
-                    break
-                  case "county":
-                    customer.physical_county = value
-                    break
-                }
-              })
-
-              return customer
-            })
-        }
+        setIsLoading(true)
+        const formData = new FormData()
+        formData.append("file", file)
 
         toast({
-          title: "Import started",
-          description: `Processing ${importData.length} customers from ${systemType.toUpperCase()} format...`,
+          title: "Processing file",
+          description: "Auto-detecting format and importing customers...",
         })
 
         const response = await fetch("/api/import-customers", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customers: importData, source: systemType }),
+          body: formData,
         })
 
         if (response.ok) {
           const result = await response.json()
           toast({
             title: "Import completed",
-            description: `Successfully imported ${result.imported} customers from ${systemType.toUpperCase()}`,
+            description: `Successfully imported ${result.imported} customers. Format: ${result.format}`,
           })
           const data = await getCustomers()
           setCustomers(data)
         } else {
-          throw new Error("Import failed")
+          const error = await response.json()
+          throw new Error(error.message || "Import failed")
         }
       } catch (error) {
+        console.error("[v0] Import error:", error)
         toast({
           title: "Import failed",
-          description: `Failed to process ${systemType.toUpperCase()} file. Please check the format.`,
+          description: error instanceof Error ? error.message : "Failed to import customers",
           variant: "destructive",
         })
+      } finally {
+        setIsLoading(false)
       }
     }
     input.click()
@@ -671,6 +551,51 @@ export default function CustomersPage() {
     return "text-gray-600"
   }
 
+  const handleBulkDelete = async () => {
+    if (selectedCustomers.length === 0) {
+      toast({
+        title: "No customers selected",
+        description: "Please select customers to delete",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (
+      !confirm(`Are you sure you want to delete ${selectedCustomers.length} customers? This action cannot be undone.`)
+    ) {
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const response = await fetch("/api/bulk-delete-customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerIds: selectedCustomers }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Customers deleted",
+          description: `${selectedCustomers.length} customers have been removed from the system`,
+        })
+        setCustomers((prev) => prev.filter((c) => !selectedCustomers.includes(c.id)))
+        setSelectedCustomers([])
+      } else {
+        throw new Error("Bulk delete failed")
+      }
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: "Failed to delete customers. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -696,66 +621,22 @@ export default function CustomersPage() {
         <div className="flex items-center space-x-2">
           {selectedCustomers.length > 0 && (
             <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="bg-white">
-                    <Download className="mr-2 h-4 w-4" />
-                    Export ({selectedCustomers.length})
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel>Export Format</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleBulkExport("csv")}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Standard CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkExport("splynx")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Splynx Format
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkExport("mikrotik")}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    MikroTik JSON
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkExport("radius")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    RADIUS Users
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="bg-white">
-                    <Upload className="mr-2 h-4 w-4" />
-                    Import
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <DropdownMenuLabel>Import From</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleBulkImport("auto")}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Auto-Detect Format
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleBulkImport("csv")}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Standard CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkImport("splynx")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Splynx System
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkImport("mikrotik")}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    MikroTik User Manager
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkImport("radius")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    RADIUS Users File
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="outline"
+                onClick={handleBulkDelete}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50 bg-transparent"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Selected ({selectedCustomers.length})
+              </Button>
+              <Button variant="outline" onClick={() => handleBulkExport("csv")}>
+                <Download className="mr-2 h-4 w-4" />
+                Export Selected
+              </Button>
+              <Button variant="outline" onClick={handleBulkImport} disabled={isLoading}>
+                <Upload className="mr-2 h-4 w-4" />
+                {isLoading ? "Importing..." : "Import (Auto-Detect)"}
+              </Button>
             </>
           )}
           <Button asChild className="bg-blue-600 hover:bg-blue-700">
@@ -774,37 +655,13 @@ export default function CustomersPage() {
               <div>
                 <h3 className="text-lg font-semibold text-blue-900">ISP System Integration</h3>
                 <p className="text-blue-700 mt-1">
-                  Import customers from Splynx, MikroTik, RADIUS, or export to any ISP system format
+                  Import customers from any ISP system - Splynx, MikroTik, RADIUS, or CSV format
                 </p>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="bg-blue-600 hover:bg-blue-700">
-                    <Database className="mr-2 h-4 w-4" />
-                    ISP Tools
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel>Import From ISP System</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => handleBulkImport("splynx")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Import from Splynx
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkImport("mikrotik")}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Import from MikroTik
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleBulkImport("radius")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Import RADIUS Users
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => handleBulkImport("auto")}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Auto-Detect & Import
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleBulkImport} disabled={isLoading}>
+                <Upload className="mr-2 h-4 w-4" />
+                {isLoading ? "Importing..." : "Import Customers"}
+              </Button>
             </div>
           </CardContent>
         </Card>

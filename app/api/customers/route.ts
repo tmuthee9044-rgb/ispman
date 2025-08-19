@@ -1,5 +1,7 @@
-import { sql } from "@vercel/postgres"
+import { neon } from "@neondatabase/serverless"
 import { NextResponse } from "next/server"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
@@ -7,8 +9,8 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      customers: result.rows,
-      count: result.rowCount,
+      customers: result,
+      count: result.length,
     })
   } catch (error) {
     console.error("Database error:", error)
@@ -24,17 +26,57 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { name, email, phone, address } = body
+
+    const {
+      firstName,
+      lastName,
+      email,
+      phone,
+      address,
+      city,
+      state,
+      postalCode,
+      country,
+      businessName,
+      businessType,
+      idNumber,
+      taxNumber,
+      billingAddress,
+      installationAddress,
+      gpsCoordinates,
+      portalUsername,
+      portalPassword,
+      preferredContactMethod,
+      referralSource,
+      servicePreferences,
+      assignedStaffId,
+    } = body
+
+    // Generate unique account number
+    const accountNumber = `ACC${Date.now()}`
 
     const result = await sql`
-      INSERT INTO customers (name, email, phone, address, status, customer_type, plan, monthly_fee, balance)
-      VALUES (${name}, ${email}, ${phone}, ${address}, 'active', 'residential', 'Basic Plan', 2500, 0)
+      INSERT INTO customers (
+        first_name, last_name, email, phone, address, city, state, postal_code, country,
+        business_name, business_type, id_number, tax_number, billing_address, 
+        installation_address, gps_coordinates, portal_username, portal_password,
+        preferred_contact_method, referral_source, service_preferences, assigned_staff_id,
+        account_number, status, created_at, updated_at
+      )
+      VALUES (
+        ${firstName}, ${lastName}, ${email}, ${phone}, ${address}, ${city}, ${state}, 
+        ${postalCode}, ${country}, ${businessName}, ${businessType}, ${idNumber}, 
+        ${taxNumber}, ${billingAddress}, ${installationAddress}, ${gpsCoordinates},
+        ${portalUsername}, ${portalPassword}, ${preferredContactMethod}, ${referralSource},
+        ${JSON.stringify(servicePreferences)}, ${assignedStaffId}, ${accountNumber}, 
+        'active', NOW(), NOW()
+      )
       RETURNING *
     `
 
     return NextResponse.json({
       success: true,
-      customer: result.rows[0],
+      customer: result[0],
     })
   } catch (error) {
     console.error("Database error:", error)

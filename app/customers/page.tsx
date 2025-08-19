@@ -43,6 +43,9 @@ import {
   CheckCircle2,
   BookmarkPlus,
   SlidersHorizontal,
+  Database,
+  FileText,
+  Settings,
 } from "lucide-react"
 
 interface EnhancedFilters {
@@ -100,6 +103,7 @@ export default function CustomersPage() {
   const [viewMode, setViewMode] = useState<"table" | "grid">("table")
   const [customers, setCustomers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [showIspToolsModal, setShowIspToolsModal] = useState(false)
 
   const [filters, setFilters] = useState<EnhancedFilters>({
     status: "all",
@@ -219,7 +223,7 @@ export default function CustomersPage() {
     }
   }
 
-  const handleBulkExport = async () => {
+  const handleBulkExport = async (format: "csv" | "splynx" | "mikrotik" | "radius" = "csv") => {
     if (selectedCustomers.length === 0) {
       toast({
         title: "No customers selected",
@@ -231,54 +235,135 @@ export default function CustomersPage() {
 
     try {
       const selectedData = customers.filter((c) => selectedCustomers.includes(c.id))
+      let content = ""
+      let filename = ""
+      let mimeType = "text/csv;charset=utf-8;"
 
-      const headers = [
-        "ID",
-        "Name",
-        "Last Name",
-        "Email",
-        "Phone",
-        "Status",
-        "Customer Type",
-        "Plan",
-        "Monthly Fee (KES)",
-        "Balance (KES)",
-        "Address",
-        "City",
-        "County",
-        "Installation Date",
-        "Last Payment",
-        "Connection Quality (%)",
-        "Created Date",
-      ]
+      switch (format) {
+        case "splynx":
+          // Splynx CSV format
+          const splynxHeaders = [
+            "login",
+            "password",
+            "name",
+            "email",
+            "phone",
+            "status",
+            "tariff_name",
+            "tariff_price",
+            "billing_type",
+            "partner_id",
+            "location_id",
+            "street_1",
+            "city",
+            "zip_code",
+            "date_add",
+            "billing_due",
+            "deposit",
+          ]
+          const splynxRows = selectedData.map((customer) => [
+            `"${customer.email || customer.phone}"`,
+            `"${Math.random().toString(36).slice(-8)}"`, // Generate temp password
+            `"${customer.name || ""}"`,
+            `"${customer.email || ""}"`,
+            `"${customer.phone || ""}"`,
+            customer.status === "active" ? "active" : "blocked",
+            `"${customer.plan || ""}"`,
+            customer.monthly_fee || 0,
+            "prepaid",
+            1,
+            1,
+            `"${customer.physical_address || customer.address || ""}"`,
+            `"${customer.physical_city || ""}"`,
+            `"${customer.postal_code || ""}"`,
+            `"${customer.created_at || ""}"`,
+            1,
+            customer.balance || 0,
+          ])
+          content = [splynxHeaders.join(","), ...splynxRows.map((row) => row.join(","))].join("\n")
+          filename = `splynx_customers_${new Date().toISOString().split("T")[0]}.csv`
+          break
 
-      const csvRows = selectedData.map((customer) => [
-        customer.id,
-        `"${customer.name || ""}"`,
-        `"${customer.last_name || ""}"`,
-        `"${customer.email || ""}"`,
-        `"${customer.phone || ""}"`,
-        `"${customer.status || ""}"`,
-        `"${customer.customer_type || ""}"`,
-        `"${customer.plan || ""}"`,
-        customer.monthly_fee || 0,
-        customer.balance || 0,
-        `"${customer.physical_address || customer.address || ""}"`,
-        `"${customer.physical_city || ""}"`,
-        `"${customer.physical_county || ""}"`,
-        `"${customer.installation_date || ""}"`,
-        `"${customer.last_payment_date || ""}"`,
-        customer.connection_quality || 0,
-        `"${customer.created_at || ""}"`,
-      ])
+        case "mikrotik":
+          // MikroTik User Manager format
+          const mikrotikData = selectedData.map((customer) => ({
+            username: customer.email || customer.phone,
+            password: Math.random().toString(36).slice(-8),
+            "full-name": customer.name,
+            email: customer.email,
+            phone: customer.phone,
+            address: customer.physical_address || customer.address,
+            profile: customer.plan,
+            "actual-profile": customer.plan,
+            disabled: customer.status !== "active" ? "yes" : "no",
+          }))
+          content = JSON.stringify(mikrotikData, null, 2)
+          filename = `mikrotik_users_${new Date().toISOString().split("T")[0]}.json`
+          mimeType = "application/json;charset=utf-8;"
+          break
 
-      const csvContent = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n")
+        case "radius":
+          // RADIUS users format
+          const radiusUsers = selectedData
+            .map(
+              (customer) =>
+                `${customer.email || customer.phone}\tCleartext-Password := "${Math.random().toString(36).slice(-8)}"\n\t\tMikrotik-Rate-Limit = "${customer.plan || "1M/1M"}",\n\t\tReply-Message = "Welcome ${customer.name}"`,
+            )
+            .join("\n\n")
+          content = radiusUsers
+          filename = `radius_users_${new Date().toISOString().split("T")[0]}.txt`
+          mimeType = "text/plain;charset=utf-8;"
+          break
 
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+        default:
+          // Standard CSV format
+          const headers = [
+            "ID",
+            "Name",
+            "Last Name",
+            "Email",
+            "Phone",
+            "Status",
+            "Customer Type",
+            "Plan",
+            "Monthly Fee (KES)",
+            "Balance (KES)",
+            "Address",
+            "City",
+            "County",
+            "Installation Date",
+            "Last Payment",
+            "Connection Quality (%)",
+            "Created Date",
+          ]
+          const csvRows = selectedData.map((customer) => [
+            customer.id,
+            `"${customer.name || ""}"`,
+            `"${customer.last_name || ""}"`,
+            `"${customer.email || ""}"`,
+            `"${customer.phone || ""}"`,
+            `"${customer.status || ""}"`,
+            `"${customer.customer_type || ""}"`,
+            `"${customer.plan || ""}"`,
+            customer.monthly_fee || 0,
+            customer.balance || 0,
+            `"${customer.physical_address || customer.address || ""}"`,
+            `"${customer.physical_city || ""}"`,
+            `"${customer.physical_county || ""}"`,
+            `"${customer.installation_date || ""}"`,
+            `"${customer.last_payment_date || ""}"`,
+            customer.connection_quality || 0,
+            `"${customer.created_at || ""}"`,
+          ])
+          content = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n")
+          filename = `customers_export_${new Date().toISOString().split("T")[0]}.csv`
+      }
+
+      const blob = new Blob([content], { type: mimeType })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `customers_export_${new Date().toISOString().split("T")[0]}.csv`
+      link.download = filename
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -286,7 +371,7 @@ export default function CustomersPage() {
 
       toast({
         title: "Export successful",
-        description: `Exported ${selectedCustomers.length} customers to CSV`,
+        description: `Exported ${selectedCustomers.length} customers in ${format.toUpperCase()} format`,
       })
     } catch (error) {
       toast({
@@ -297,92 +382,156 @@ export default function CustomersPage() {
     }
   }
 
-  const handleBulkImport = () => {
+  const handleBulkImport = (systemType: "auto" | "splynx" | "mikrotik" | "radius" | "csv" = "auto") => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".csv"
+    input.accept = systemType === "radius" ? ".txt" : systemType === "mikrotik" ? ".json" : ".csv"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
 
       try {
         const text = await file.text()
-        const lines = text.split("\n").filter((line) => line.trim())
+        let importData: any[] = []
 
-        if (lines.length < 2) {
-          toast({
-            title: "Invalid file",
-            description: "CSV file must contain headers and at least one data row",
-            variant: "destructive",
-          })
-          return
+        // Auto-detect format or use specified format
+        if (systemType === "auto") {
+          if (file.name.toLowerCase().includes("splynx") || text.includes("tariff_name")) {
+            systemType = "splynx"
+          } else if (file.name.toLowerCase().includes("mikrotik") || text.startsWith("[") || text.startsWith("{")) {
+            systemType = "mikrotik"
+          } else if (file.name.toLowerCase().includes("radius") || text.includes("Cleartext-Password")) {
+            systemType = "radius"
+          } else {
+            systemType = "csv"
+          }
         }
 
-        const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
-        const dataRows = lines.slice(1)
+        switch (systemType) {
+          case "splynx":
+            const splynxLines = text.split("\n").filter((line) => line.trim())
+            if (splynxLines.length < 2) throw new Error("Invalid Splynx format")
+
+            const splynxHeaders = splynxLines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
+            const splynxDataRows = splynxLines.slice(1)
+
+            importData = splynxDataRows.map((row) => {
+              const values = row.split(",").map((v) => v.trim().replace(/"/g, ""))
+              return {
+                name: values[splynxHeaders.indexOf("name")] || "",
+                email: values[splynxHeaders.indexOf("email")] || "",
+                phone: values[splynxHeaders.indexOf("phone")] || "",
+                status: values[splynxHeaders.indexOf("status")] === "active" ? "active" : "inactive",
+                plan: values[splynxHeaders.indexOf("tariff_name")] || "",
+                monthly_fee: Number.parseFloat(values[splynxHeaders.indexOf("tariff_price")]) || 0,
+                balance: Number.parseFloat(values[splynxHeaders.indexOf("deposit")]) || 0,
+                physical_address: values[splynxHeaders.indexOf("street_1")] || "",
+                physical_city: values[splynxHeaders.indexOf("city")] || "",
+                postal_code: values[splynxHeaders.indexOf("zip_code")] || "",
+                customer_type: "individual",
+              }
+            })
+            break
+
+          case "mikrotik":
+            const mikrotikData = JSON.parse(text)
+            importData = mikrotikData.map((user: any) => ({
+              name: user["full-name"] || user.username,
+              email: user.email || "",
+              phone: user.phone || "",
+              status: user.disabled === "yes" ? "inactive" : "active",
+              plan: user.profile || user["actual-profile"] || "",
+              physical_address: user.address || "",
+              customer_type: "individual",
+            }))
+            break
+
+          case "radius":
+            const radiusLines = text.split("\n").filter((line) => line.trim() && !line.startsWith("\t"))
+            importData = radiusLines.map((line) => {
+              const username = line.split("\t")[0]
+              const isEmail = username.includes("@")
+              return {
+                name: username,
+                email: isEmail ? username : "",
+                phone: !isEmail ? username : "",
+                status: "active",
+                customer_type: "individual",
+              }
+            })
+            break
+
+          default:
+            // Standard CSV processing
+            const lines = text.split("\n").filter((line) => line.trim())
+            if (lines.length < 2) throw new Error("Invalid CSV format")
+
+            const headers = lines[0].split(",").map((h) => h.trim().replace(/"/g, ""))
+            const dataRows = lines.slice(1)
+
+            importData = dataRows.map((row) => {
+              const values = row.split(",").map((v) => v.trim().replace(/"/g, ""))
+              const customer: any = {}
+
+              headers.forEach((header, index) => {
+                const value = values[index] || ""
+                switch (header.toLowerCase()) {
+                  case "name":
+                    customer.name = value
+                    break
+                  case "last name":
+                    customer.last_name = value
+                    break
+                  case "email":
+                    customer.email = value
+                    break
+                  case "phone":
+                    customer.phone = value
+                    break
+                  case "customer type":
+                    customer.customer_type = value
+                    break
+                  case "status":
+                    customer.status = value || "active"
+                    break
+                  case "monthly fee (kes)":
+                    customer.monthly_fee = Number.parseFloat(value) || 0
+                    break
+                  case "balance (kes)":
+                    customer.balance = Number.parseFloat(value) || 0
+                    break
+                  case "address":
+                    customer.physical_address = value
+                    break
+                  case "city":
+                    customer.physical_city = value
+                    break
+                  case "county":
+                    customer.physical_county = value
+                    break
+                }
+              })
+
+              return customer
+            })
+        }
 
         toast({
           title: "Import started",
-          description: `Processing ${dataRows.length} customers from ${file.name}...`,
-        })
-
-        const importData = dataRows.map((row) => {
-          const values = row.split(",").map((v) => v.trim().replace(/"/g, ""))
-          const customer: any = {}
-
-          headers.forEach((header, index) => {
-            const value = values[index] || ""
-            switch (header.toLowerCase()) {
-              case "name":
-                customer.name = value
-                break
-              case "last name":
-                customer.last_name = value
-                break
-              case "email":
-                customer.email = value
-                break
-              case "phone":
-                customer.phone = value
-                break
-              case "customer type":
-                customer.customer_type = value
-                break
-              case "status":
-                customer.status = value || "active"
-                break
-              case "monthly fee (kes)":
-                customer.monthly_fee = Number.parseFloat(value) || 0
-                break
-              case "balance (kes)":
-                customer.balance = Number.parseFloat(value) || 0
-                break
-              case "address":
-                customer.physical_address = value
-                break
-              case "city":
-                customer.physical_city = value
-                break
-              case "county":
-                customer.physical_county = value
-                break
-            }
-          })
-
-          return customer
+          description: `Processing ${importData.length} customers from ${systemType.toUpperCase()} format...`,
         })
 
         const response = await fetch("/api/import-customers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ customers: importData }),
+          body: JSON.stringify({ customers: importData, source: systemType }),
         })
 
         if (response.ok) {
           const result = await response.json()
           toast({
             title: "Import completed",
-            description: `Successfully imported ${result.imported} customers`,
+            description: `Successfully imported ${result.imported} customers from ${systemType.toUpperCase()}`,
           })
           const data = await getCustomers()
           setCustomers(data)
@@ -392,7 +541,7 @@ export default function CustomersPage() {
       } catch (error) {
         toast({
           title: "Import failed",
-          description: "Failed to process CSV file. Please check the format.",
+          description: `Failed to process ${systemType.toUpperCase()} file. Please check the format.`,
           variant: "destructive",
         })
       }
@@ -547,14 +696,66 @@ export default function CustomersPage() {
         <div className="flex items-center space-x-2">
           {selectedCustomers.length > 0 && (
             <>
-              <Button variant="outline" onClick={handleBulkExport} className="bg-white">
-                <Download className="mr-2 h-4 w-4" />
-                Export ({selectedCustomers.length})
-              </Button>
-              <Button variant="outline" onClick={handleBulkImport} className="bg-white">
-                <Upload className="mr-2 h-4 w-4" />
-                Import
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-white">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export ({selectedCustomers.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Export Format</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleBulkExport("csv")}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Standard CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkExport("splynx")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Splynx Format
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkExport("mikrotik")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    MikroTik JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkExport("radius")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    RADIUS Users
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-white">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Import
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuLabel>Import From</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleBulkImport("auto")}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Auto-Detect Format
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleBulkImport("csv")}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Standard CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkImport("splynx")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Splynx System
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkImport("mikrotik")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    MikroTik User Manager
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkImport("radius")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    RADIUS Users File
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
           <Button asChild className="bg-blue-600 hover:bg-blue-700">
@@ -565,6 +766,49 @@ export default function CustomersPage() {
           </Button>
         </div>
       </div>
+
+      {selectedCustomers.length === 0 && (
+        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-blue-900">ISP System Integration</h3>
+                <p className="text-blue-700 mt-1">
+                  Import customers from Splynx, MikroTik, RADIUS, or export to any ISP system format
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="bg-blue-600 hover:bg-blue-700">
+                    <Database className="mr-2 h-4 w-4" />
+                    ISP Tools
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Import From ISP System</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => handleBulkImport("splynx")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Import from Splynx
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkImport("mikrotik")}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Import from MikroTik
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleBulkImport("radius")}>
+                    <Database className="mr-2 h-4 w-4" />
+                    Import RADIUS Users
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleBulkImport("auto")}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Auto-Detect & Import
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:space-y-0 md:space-x-4">
         <div className="relative flex-1 max-w-md">

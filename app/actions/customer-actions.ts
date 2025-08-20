@@ -7,14 +7,16 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function createCustomer(formData: FormData) {
   try {
-    const name = formData.get("name") as string
+    const firstName = formData.get("first_name") as string
+    const lastName = formData.get("last_name") as string
     const email = formData.get("email") as string
     const phone = formData.get("phone") as string
     const address = formData.get("address") as string
     const status = (formData.get("status") as string) || "active"
 
     console.log("Creating customer with data:", {
-      name,
+      firstName,
+      lastName,
       email,
       phone,
       address,
@@ -23,10 +25,10 @@ export async function createCustomer(formData: FormData) {
 
     const result = await sql`
       INSERT INTO customers (
-        name, email, phone, address, status, created_at, updated_at
+        first_name, last_name, email, phone, address, status, created_at, updated_at
       )
       VALUES (
-        ${name}, ${email}, ${phone}, ${address}, ${status}, NOW(), NOW()
+        ${firstName}, ${lastName}, ${email}, ${phone}, ${address}, ${status}, NOW(), NOW()
       )
       RETURNING *
     `
@@ -43,20 +45,21 @@ export async function createCustomer(formData: FormData) {
 
 export async function updateCustomer(id: number, formData: FormData) {
   try {
-    const name = formData.get("name") as string
+    const firstName = formData.get("first_name") as string
+    const lastName = formData.get("last_name") as string
     const email = formData.get("email") as string
     const phone = formData.get("phone") as string
     const address = formData.get("address") as string
     const status = formData.get("status") as string
 
-    console.log("Updating customer with id:", id, "and data:", { name, email, phone, address, status })
+    console.log("Updating customer with id:", id, "and data:", { firstName, lastName, email, phone, address, status })
 
     const result = await sql`
       UPDATE customers 
-      SET name = ${name}, email = ${email}, phone = ${phone}, 
+      SET first_name = ${firstName}, last_name = ${lastName}, email = ${email}, phone = ${phone}, 
           address = ${address}, status = ${status}, updated_at = NOW()
       WHERE id = ${id}
-      RETURNING id, name, email, phone, address, status, updated_at
+      RETURNING id, first_name, last_name, email, phone, address, status, updated_at
     `
 
     console.log("Customer updated successfully:", result[0])
@@ -75,7 +78,9 @@ export async function getCustomers() {
     const customers = await sql`
       SELECT 
         c.id, 
-        c.name, 
+        c.first_name,
+        c.last_name,
+        CONCAT(c.first_name, ' ', c.last_name) as name,
         c.email, 
         c.phone, 
         c.address, 
@@ -114,7 +119,9 @@ export async function getCustomer(id: number) {
     const result = await sql`
       SELECT 
         c.id, 
-        c.name, 
+        c.first_name,
+        c.last_name,
+        CONCAT(c.first_name, ' ', c.last_name) as name,
         c.email, 
         c.phone, 
         c.address, 

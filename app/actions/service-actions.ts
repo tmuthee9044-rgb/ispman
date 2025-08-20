@@ -12,24 +12,13 @@ export async function getServicePlans() {
         id,
         name,
         description,
-        speed_down,
-        speed_up,
+        speed,
         price,
-        data_limit,
-        category,
-        tax_rate,
-        setup_fee,
-        installation_fee,
-        equipment_fee,
-        fup_limit,
-        fup_speed,
-        contract_period,
-        early_termination_fee,
-        active,
+        status as active,
         created_at,
         updated_at
       FROM service_plans 
-      WHERE active = true 
+      WHERE status = 'active' 
       ORDER BY price ASC
     `
 
@@ -53,13 +42,13 @@ export async function createServicePlan(formData: FormData) {
     const fupLimit = formData.get("fup_limit") ? Number.parseInt(formData.get("fup_limit") as string) : null
     const fupSpeed = (formData.get("fup_speed") as string) || null
 
+    const speedString = `${speedDown}/${speedUp} Mbps`
+
     const result = await sql`
       INSERT INTO service_plans (
-        name, description, category, speed_down, speed_up, price, 
-        tax_rate, setup_fee, fup_limit, fup_speed, active
+        name, description, speed, price, status
       ) VALUES (
-        ${name}, ${description}, ${category}, ${speedDown}, ${speedUp}, ${price},
-        ${taxRate}, ${setupFee}, ${fupLimit}, ${fupSpeed}, true
+        ${name}, ${description}, ${speedString}, ${price}, 'active'
       ) RETURNING id
     `
 
@@ -76,22 +65,14 @@ export async function updateServicePlan(formData: FormData) {
     const id = Number.parseInt(formData.get("id") as string)
     const name = formData.get("name") as string
     const description = formData.get("description") as string
-    const category = formData.get("category") as string
     const price = Number.parseFloat(formData.get("price") as string)
-    const taxRate = Number.parseFloat(formData.get("tax_rate") as string)
-    const fupLimit = formData.get("fup_limit") ? Number.parseInt(formData.get("fup_limit") as string) : null
-    const fupSpeed = (formData.get("fup_speed") as string) || null
 
     await sql`
       UPDATE service_plans 
       SET 
         name = ${name},
         description = ${description},
-        category = ${category},
         price = ${price},
-        tax_rate = ${taxRate},
-        fup_limit = ${fupLimit},
-        fup_speed = ${fupSpeed},
         updated_at = NOW()
       WHERE id = ${id}
     `

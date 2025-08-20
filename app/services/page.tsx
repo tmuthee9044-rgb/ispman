@@ -46,7 +46,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
 
-  const enhancedServicePlans = [
+  const fallbackServicePlans = [
     {
       id: 1,
       name: "Basic Home",
@@ -55,9 +55,9 @@ export default function ServicesPage() {
       customers: 450,
       active: true,
       description: "Perfect for light browsing and email",
-      fup_limit: 50, // GB
+      fup_limit: 50,
       fup_speed: "2/1 Mbps",
-      tax_rate: 16, // VAT %
+      tax_rate: 16,
       setup_fee: 500,
       installation_fee: 1000,
       equipment_fee: 2500,
@@ -148,12 +148,37 @@ export default function ServicesPage() {
     const loadPlans = async () => {
       try {
         const result = await getServicePlans()
-        if (result.success) {
-          setServicePlans(enhancedServicePlans) // Use enhanced plans for now
+        if (result.success && result.data && result.data.length > 0) {
+          const dbPlans = result.data.map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            speed:
+              plan.download_speed && plan.upload_speed
+                ? `${plan.download_speed}/${plan.upload_speed} Mbps`
+                : plan.speed || "N/A",
+            price: Number.parseFloat(plan.price) || 0,
+            customers: plan.customer_count || 0,
+            active: plan.status === "active",
+            description: plan.description || "",
+            fup_limit: plan.data_limit,
+            fup_speed: plan.throttled_speed,
+            tax_rate: 16,
+            setup_fee: Number.parseFloat(plan.setup_fee) || 0,
+            installation_fee: Number.parseFloat(plan.installation_fee) || 0,
+            equipment_fee: Number.parseFloat(plan.equipment_fee) || 0,
+            category: plan.category || "residential",
+            contract_period: plan.contract_length || 12,
+            early_termination_fee: Number.parseFloat(plan.early_termination_fee) || 0,
+            features: plan.features ? JSON.parse(plan.features) : [],
+          }))
+          setServicePlans(dbPlans)
+        } else {
+          console.log("[v0] No database plans found, using fallback data")
+          setServicePlans(fallbackServicePlans)
         }
       } catch (error) {
         console.error("Error loading plans:", error)
-        setServicePlans(enhancedServicePlans)
+        setServicePlans(fallbackServicePlans)
       } finally {
         setLoading(false)
       }
@@ -170,10 +195,31 @@ export default function ServicesPage() {
           description: result.message || "New service plan has been created successfully.",
         })
         setAddPlanOpen(false)
-        // Reload plans
         const updatedPlans = await getServicePlans()
-        if (updatedPlans.success) {
-          setServicePlans(enhancedServicePlans)
+        if (updatedPlans.success && updatedPlans.data) {
+          const dbPlans = updatedPlans.data.map((plan: any) => ({
+            id: plan.id,
+            name: plan.name,
+            speed:
+              plan.download_speed && plan.upload_speed
+                ? `${plan.download_speed}/${plan.upload_speed} Mbps`
+                : plan.speed || "N/A",
+            price: Number.parseFloat(plan.price) || 0,
+            customers: plan.customer_count || 0,
+            active: plan.status === "active",
+            description: plan.description || "",
+            fup_limit: plan.data_limit,
+            fup_speed: plan.throttled_speed,
+            tax_rate: 16,
+            setup_fee: Number.parseFloat(plan.setup_fee) || 0,
+            installation_fee: Number.parseFloat(plan.installation_fee) || 0,
+            equipment_fee: Number.parseFloat(plan.equipment_fee) || 0,
+            category: plan.category || "residential",
+            contract_period: plan.contract_length || 12,
+            early_termination_fee: Number.parseFloat(plan.early_termination_fee) || 0,
+            features: plan.features ? JSON.parse(plan.features) : [],
+          }))
+          setServicePlans(dbPlans)
         }
       } else {
         toast({
@@ -220,14 +266,12 @@ export default function ServicesPage() {
   const handleToggleStatus = async (planId: number, currentStatus: boolean) => {
     console.log("[v0] Toggle status clicked for plan:", planId, "current status:", currentStatus)
     try {
-      // In a real implementation, this would call an API
       const newStatus = currentStatus ? "deactivated" : "activated"
       toast({
         title: `Plan ${newStatus}`,
         description: `Service plan has been ${newStatus}.`,
       })
 
-      // Update local state
       setServicePlans((prev) => prev.map((plan) => (plan.id === planId ? { ...plan, active: !currentStatus } : plan)))
     } catch (error) {
       console.log("[v0] Error toggling status:", error)
@@ -268,12 +312,12 @@ export default function ServicesPage() {
 
   const calculateTotalPrice = (plan: any) => {
     const basePrice = plan.price
-    const taxAmount = basePrice * TAX_RATES.VAT // Using Kenya VAT rate from currency config
+    const taxAmount = basePrice * TAX_RATES.VAT
     return basePrice + taxAmount
   }
 
   const formatPrice = (amount: number) => {
-    return formatCurrency(amount) // Using centralized KES currency formatting
+    return formatCurrency(amount)
   }
 
   if (loading) {
@@ -349,9 +393,8 @@ export default function ServicesPage() {
               {formatCurrencyCompact(
                 servicePlans.reduce((sum, plan) => sum + calculateTotalPrice(plan) * plan.customers, 0),
               )}{" "}
-              {/* Using compact KES formatting */}
             </div>
-            <p className="text-xs text-muted-foreground">Including 16% VAT</p> {/* Updated to show Kenya VAT rate */}
+            <p className="text-xs text-muted-foreground">Including 16% VAT</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-yellow-500">
@@ -370,7 +413,7 @@ export default function ServicesPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">KSh 12,749</div> {/* Updated to KSh format */}
+            <div className="text-2xl font-bold">KSh 12,749</div>
             <p className="text-xs text-muted-foreground">Monthly average</p>
           </CardContent>
         </Card>

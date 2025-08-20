@@ -5,18 +5,14 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
-    const content = await sql`
-      SELECT content, updated_at 
-      FROM company_content 
-      WHERE type = 'terms' 
-      ORDER BY updated_at DESC 
-      LIMIT 1
+    const result = await sql`
+      SELECT value FROM system_config 
+      WHERE key = 'content_terms'
     `
 
-    if (content.length > 0) {
+    if (result.length > 0) {
       return NextResponse.json({
-        content: JSON.parse(content[0].content),
-        lastUpdated: content[0].updated_at,
+        content: JSON.parse(result[0].value),
       })
     }
 
@@ -31,14 +27,16 @@ export async function POST(request: NextRequest) {
   try {
     const { content } = await request.json()
 
-    // Update or insert terms content
+    const contentWithTimestamp = {
+      ...content,
+      lastUpdated: new Date().toLocaleDateString(),
+    }
+
     await sql`
-      INSERT INTO company_content (type, content, updated_at)
-      VALUES ('terms', ${JSON.stringify(content)}, NOW())
-      ON CONFLICT (type) 
-      DO UPDATE SET 
-        content = ${JSON.stringify(content)},
-        updated_at = NOW()
+      INSERT INTO system_config (key, value, created_at) 
+      VALUES ('content_terms', ${JSON.stringify(contentWithTimestamp)}, CURRENT_TIMESTAMP)
+      ON CONFLICT (key) 
+      DO UPDATE SET value = ${JSON.stringify(contentWithTimestamp)}, created_at = CURRENT_TIMESTAMP
     `
 
     return NextResponse.json({ success: true, message: "Terms content saved successfully" })

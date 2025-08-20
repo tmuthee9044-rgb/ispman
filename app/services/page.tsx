@@ -320,6 +320,14 @@ export default function ServicesPage() {
     return formatCurrency(amount)
   }
 
+  const totalRevenue = servicePlans.reduce((sum, plan) => sum + calculateTotalPrice(plan) * plan.customers, 0)
+  const totalCustomers = servicePlans.reduce((sum, plan) => sum + plan.customers, 0)
+  const mostPopularPlan = servicePlans.reduce(
+    (prev, current) => (current.customers > prev.customers ? current : prev),
+    servicePlans[0] || { name: "N/A", customers: 0 },
+  )
+  const avgRevenuePerPlan = servicePlans.length > 0 ? totalRevenue / servicePlans.length : 0
+
   if (loading) {
     return (
       <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
@@ -377,9 +385,7 @@ export default function ServicesPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {servicePlans.reduce((sum, plan) => sum + plan.customers, 0).toLocaleString()}
-            </div>
+            <div className="text-2xl font-bold">{totalCustomers.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Across all plans</p>
           </CardContent>
         </Card>
@@ -389,11 +395,7 @@ export default function ServicesPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatCurrencyCompact(
-                servicePlans.reduce((sum, plan) => sum + calculateTotalPrice(plan) * plan.customers, 0),
-              )}{" "}
-            </div>
+            <div className="text-2xl font-bold">{formatCurrencyCompact(totalRevenue)}</div>
             <p className="text-xs text-muted-foreground">Including 16% VAT</p>
           </CardContent>
         </Card>
@@ -403,8 +405,8 @@ export default function ServicesPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Standard</div>
-            <p className="text-xs text-muted-foreground">1,200 subscribers</p>
+            <div className="text-2xl font-bold">{mostPopularPlan.name}</div>
+            <p className="text-xs text-muted-foreground">{mostPopularPlan.customers.toLocaleString()} subscribers</p>
           </CardContent>
         </Card>
         <Card className="border-l-4 border-l-orange-500">
@@ -413,7 +415,7 @@ export default function ServicesPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">KSh 12,749</div>
+            <div className="text-2xl font-bold">{formatCurrency(avgRevenuePerPlan)}</div>
             <p className="text-xs text-muted-foreground">Monthly average</p>
           </CardContent>
         </Card>
@@ -680,7 +682,6 @@ export default function ServicesPage() {
                   {servicePlans
                     .filter((p) => p.active)
                     .map((plan) => {
-                      const totalCustomers = servicePlans.reduce((sum, p) => sum + p.customers, 0)
                       const percentage = ((plan.customers / totalCustomers) * 100).toFixed(1)
 
                       return (

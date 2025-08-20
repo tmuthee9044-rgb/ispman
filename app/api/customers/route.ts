@@ -90,6 +90,49 @@ export async function POST(request: Request) {
     // Get primary phone number from form
     const phone = (formData.get("phone_0") as string) || (formData.get("phone") as string)
 
+    if (email) {
+      const existingCustomer = await sql`
+        SELECT id, first_name, last_name, email FROM customers 
+        WHERE email = ${email} LIMIT 1
+      `
+
+      if (existingCustomer.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `A customer with email ${email} already exists. Customer: ${existingCustomer[0].first_name} ${existingCustomer[0].last_name}`,
+            duplicate: true,
+            existingCustomer: existingCustomer[0],
+          },
+          { status: 409 },
+        )
+      }
+    }
+
+    if (phone) {
+      const existingPhone = await sql`
+        SELECT c.id, c.first_name, c.last_name, c.email FROM customers c
+        WHERE c.phone = ${phone} 
+        OR EXISTS (
+          SELECT 1 FROM customer_phone_numbers cpn 
+          WHERE cpn.customer_id = c.id AND cpn.phone_number = ${phone}
+        )
+        LIMIT 1
+      `
+
+      if (existingPhone.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `A customer with phone number ${phone} already exists. Customer: ${existingPhone[0].first_name} ${existingPhone[0].last_name}`,
+            duplicate: true,
+            existingCustomer: existingPhone[0],
+          },
+          { status: 409 },
+        )
+      }
+    }
+
     const result = await sql`
       INSERT INTO customers (
         first_name, last_name, email, phone, address, city, state, postal_code, country,
@@ -154,6 +197,34 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("Database error:", error)
+
+    if (error instanceof Error) {
+      if (error.message.includes('duplicate key value violates unique constraint "customers_email_key"')) {
+        const emailMatch = error.message.match(/Key $$email$$=$$([^)]+)$$/)
+        const duplicateEmail = emailMatch ? emailMatch[1] : "unknown"
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: `A customer with email ${duplicateEmail} already exists. Please use a different email address.`,
+            duplicate: true,
+          },
+          { status: 409 },
+        )
+      }
+
+      if (error.message.includes("duplicate key value violates unique constraint")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "A customer with this information already exists. Please check email and phone number.",
+            duplicate: true,
+          },
+          { status: 409 },
+        )
+      }
+    }
+
     return NextResponse.json(
       {
         success: false,

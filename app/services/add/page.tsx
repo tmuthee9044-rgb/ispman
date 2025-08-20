@@ -31,7 +31,10 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-export default function AddServicePage() {
+import { useRouter } from "next/navigation"
+
+export default function AddServicePlan() {
+  const router = useRouter()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("basic")
 
@@ -181,6 +184,10 @@ export default function AddServicePage() {
           taxRate: [16],
         })
         setActiveTab("basic")
+
+        setTimeout(() => {
+          router.push("/services")
+        }, 1500)
       } else {
         throw new Error(result.message || "Failed to create service plan")
       }

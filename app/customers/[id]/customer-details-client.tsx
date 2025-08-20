@@ -50,6 +50,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import React from "react"
 
 interface Customer {
   id: number
@@ -454,6 +455,9 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
   const [messageType, setMessageType] = useState("email")
   const [isLoading, setIsLoading] = useState(false)
   const [suspensionNotes, setSuspensionNotes] = useState("")
+  const [customerServices, setCustomerServices] = useState([])
+  const [availableServicePlans, setAvailableServicePlans] = useState([])
+  const [selectedServicePlan, setSelectedServicePlan] = useState("")
 
   const communications = [
     {
@@ -577,25 +581,63 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
     return expiryDate.toLocaleDateString()
   }
 
-  const handleAddService = async (serviceData: any) => {
+  const loadCustomerServices = async () => {
     try {
+      const response = await fetch(`/api/customers/${customer.id}/services`)
+      if (response.ok) {
+        const data = await response.json()
+        setCustomerServices(data.services || [])
+      }
+    } catch (error) {
+      console.error("Failed to load customer services:", error)
+    }
+  }
+
+  const loadAvailableServicePlans = async () => {
+    try {
+      const response = await fetch("/api/service-plans")
+      if (response.ok) {
+        const data = await response.json()
+        setAvailableServicePlans(data.plans || [])
+      }
+    } catch (error) {
+      console.error("Failed to load service plans:", error)
+    }
+  }
+
+  React.useEffect(() => {
+    loadCustomerServices()
+    loadAvailableServicePlans()
+  }, [customer.id])
+
+  const handleAddService = async () => {
+    if (!selectedServicePlan) {
+      toast.error("Please select a service plan")
+      return
+    }
+
+    try {
+      const selectedPlan = availableServicePlans.find((plan) => plan.id === selectedServicePlan)
       const response = await fetch(`/api/customers/${customer.id}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(serviceData),
+        body: JSON.stringify({
+          service_plan_id: selectedServicePlan,
+          monthly_fee: selectedPlan?.price || 0,
+        }),
       })
 
       if (response.ok) {
         toast.success("Service added successfully")
-        // Refresh services data
-        window.location.reload()
+        loadCustomerServices() // Reload services
+        setShowAddServiceModal(false)
+        setSelectedServicePlan("")
       } else {
         toast.error("Failed to add service")
       }
     } catch (error) {
       toast.error("Error adding service")
     }
-    setShowAddServiceModal(false)
   }
 
   const handleEditService = async (serviceId: string) => {
@@ -700,7 +742,11 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
       const response = await fetch(`/api/customers/${customer.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editedCustomer),
+        body: JSON.stringify({
+          ...editedCustomer,
+          first_name: editedCustomer.first_name || editedCustomer.name?.split(" ")[0] || "",
+          last_name: editedCustomer.last_name || editedCustomer.name?.split(" ")[1] || "",
+        }),
       })
 
       if (response.ok) {
@@ -708,15 +754,16 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
         setEditingInfo(false)
         window.location.reload()
       } else {
-        toast.error("Failed to update customer information")
+        const errorData = await response.json()
+        toast.error(errorData.error || "Failed to update customer information")
       }
     } catch (error) {
+      console.error("Update error:", error)
       toast.error("Error updating customer information")
     }
   }
 
   const handleServiceExtension = async () => {
-    console.log("[v0] Extending service:", { extensionDays, extensionAmount, includeInInvoice })
     try {
       const response = await fetch(`/api/customers/${customer.id}/extend-service`, {
         method: "POST",
@@ -728,17 +775,18 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
         }),
       })
       if (response.ok) {
-        toast({ title: "Service extended successfully" })
+        toast.success("Service extended successfully")
         setShowServiceExtensionModal(false)
-        window.location.reload()
+        loadCustomerServices() // Reload services
+      } else {
+        toast.error("Failed to extend service")
       }
     } catch (error) {
-      toast({ title: "Error extending service", variant: "destructive" })
+      toast.error("Error extending service")
     }
   }
 
   const handleServiceSuspension = async () => {
-    console.log("[v0] Suspending service:", { suspensionReason, suspensionNotes })
     try {
       const response = await fetch(`/api/customers/${customer.id}/suspend`, {
         method: "POST",
@@ -746,15 +794,18 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
         body: JSON.stringify({
           reason: suspensionReason,
           notes: suspensionNotes,
+          duration: suspensionDuration,
         }),
       })
       if (response.ok) {
-        toast({ title: "Service suspended successfully" })
+        toast.success("Service suspended successfully")
         setShowSuspendServiceModal(false)
-        window.location.reload()
+        window.location.reload() // Reload page to show updated status
+      } else {
+        toast.error("Failed to suspend service")
       }
     } catch (error) {
-      toast({ title: "Error suspending service", variant: "destructive" })
+      toast.error("Error suspending service")
     }
   }
 
@@ -978,8 +1029,8 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                   <div>
                     <CardTitle>Customer Services</CardTitle>
                     <CardDescription>
-                      Manage services for this customer. Total monthly cost: {/* Updated to KES */}
-                      {formatCurrency(services.reduce((sum, service) => sum + service.monthly_fee, 0))}
+                      Manage services for this customer. Total monthly cost:
+                      {formatCurrency(customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0))}
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
@@ -999,48 +1050,38 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                 </div>
               </CardHeader>
               <CardContent>
-                {services.length > 0 ? (
+                {customerServices.length > 0 ? (
                   <div className="space-y-4">
-                    {services.map((service) => (
+                    {customerServices.map((service) => (
                       <Card key={service.id} className="border-l-4 border-l-primary">
                         <CardContent className="p-6">
                           <div className="flex items-center justify-between">
                             <div className="space-y-2">
                               <div className="flex items-center gap-3">
                                 <Wifi className="w-5 h-5 text-primary" />
-                                <h3 className="font-semibold text-lg">{service.name}</h3>
+                                <h3 className="font-semibold text-lg">{service.service_name || service.name}</h3>
                                 {getStatusBadge(service.status)}
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                                 <div>
                                   <span className="text-muted-foreground">Monthly Fee:</span>
-                                  <div className="font-medium">{formatCurrency(service.monthly_fee)}</div>
+                                  <div className="font-medium">{formatCurrency(service.monthly_fee || 0)}</div>
                                 </div>
                                 <div>
                                   <span className="text-muted-foreground">Next Billing:</span>
-                                  <div className="font-medium">{service.next_billing}</div>
+                                  <div className="font-medium">
+                                    {service.next_billing_date
+                                      ? new Date(service.next_billing_date).toLocaleDateString()
+                                      : "N/A"}
+                                  </div>
                                 </div>
                                 <div>
-                                  <span className="text-muted-foreground">IP Address:</span>
-                                  <div className="font-medium">{service.ip_address}</div>
+                                  <span className="text-muted-foreground">Speed:</span>
+                                  <div className="font-medium">{service.speed || "N/A"}</div>
                                 </div>
                                 <div>
-                                  <span className="text-muted-foreground">Router:</span>
-                                  <div className="font-medium">{service.router}</div>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm mt-2">
-                                <div>
-                                  <span className="text-muted-foreground">Service Expires:</span>
-                                  <div className="font-medium">{service.expires_at || "N/A"}</div>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Days Remaining:</span>
-                                  <div className="font-medium">{service.days_remaining || "N/A"}</div>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Auto Renewal:</span>
-                                  <div className="font-medium">{service.auto_renewal ? "Yes" : "No"}</div>
+                                  <span className="text-muted-foreground">Status:</span>
+                                  <div className="font-medium capitalize">{service.status}</div>
                                 </div>
                               </div>
                             </div>
@@ -1828,6 +1869,58 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
       </div>
 
       {/* Modals */}
+      {showAddServiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Add Service</h3>
+
+            <div className="space-y-4">
+              <div>
+                <Label>Select Service Plan</Label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={selectedServicePlan}
+                  onChange={(e) => setSelectedServicePlan(e.target.value)}
+                >
+                  <option value="">Choose a service plan</option>
+                  {availableServicePlans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} - {formatCurrency(plan.price)} - {plan.speed}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedServicePlan && (
+                <div className="p-3 bg-gray-50 rounded-md">
+                  {(() => {
+                    const selectedPlan = availableServicePlans.find((plan) => plan.id === selectedServicePlan)
+                    return selectedPlan ? (
+                      <div>
+                        <h4 className="font-medium">{selectedPlan.name}</h4>
+                        <p className="text-sm text-gray-600">{selectedPlan.description}</p>
+                        <p className="text-sm font-medium mt-1">
+                          {formatCurrency(selectedPlan.price)}/month - {selectedPlan.speed}
+                        </p>
+                      </div>
+                    ) : null
+                  })()}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setShowAddServiceModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddService} disabled={!selectedServicePlan}>
+                Add Service
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AddServiceModal
         open={showAddServiceModal}
         onOpenChange={setShowAddServiceModal}
@@ -1990,22 +2083,6 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
 
             <div className="space-y-4">
               <div>
-                <Label>Select Service to Suspend</Label>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  value={selectedServiceForSuspension}
-                  onChange={(e) => setSelectedServiceForSuspension(e.target.value)}
-                >
-                  <option value="">Select a service</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>
-                      {service.name} - {formatCurrency(service.monthly_fee)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
                 <Label>Suspension Duration (days)</Label>
                 <Input
                   type="number"
@@ -2026,18 +2103,24 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                   placeholder="Enter reason for suspension..."
                 />
               </div>
+
+              <div>
+                <Label>Additional Notes</Label>
+                <textarea
+                  className="w-full p-2 border rounded-md"
+                  rows={2}
+                  value={suspensionNotes}
+                  onChange={(e) => setSuspensionNotes(e.target.value)}
+                  placeholder="Any additional notes..."
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setShowSuspendServiceModal(false)}>
                 Cancel
               </Button>
-              <Button
-                onClick={() => handleSuspendService(selectedServiceForSuspension)}
-                disabled={!selectedServiceForSuspension}
-              >
-                Suspend Service
-              </Button>
+              <Button onClick={handleServiceSuspension}>Suspend Service</Button>
             </div>
           </div>
         </div>

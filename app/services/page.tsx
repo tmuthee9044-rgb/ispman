@@ -18,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   Globe,
@@ -306,102 +305,12 @@ export default function ServicesPage() {
             <Calculator className="mr-2 h-4 w-4" />
             Pricing Calculator
           </Button>
-          <Dialog open={addPlanOpen} onOpenChange={setAddPlanOpen}>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Plan
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Add New Service Plan</DialogTitle>
-                <DialogDescription>Create a new internet service plan with FUP and pricing details</DialogDescription>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const formData = new FormData(e.currentTarget)
-                  handleAddPlan(formData)
-                }}
-              >
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="plan-name">Plan Name</Label>
-                      <Input id="plan-name" name="name" placeholder="Enter plan name" required />
-                    </div>
-                    <div>
-                      <Label htmlFor="category">Category</Label>
-                      <Select name="category" required>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="residential">Residential</SelectItem>
-                          <SelectItem value="business">Business</SelectItem>
-                          <SelectItem value="enterprise">Enterprise</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="download-speed">Download Speed (Mbps)</Label>
-                      <Input id="download-speed" name="speed_down" type="number" placeholder="100" required />
-                    </div>
-                    <div>
-                      <Label htmlFor="upload-speed">Upload Speed (Mbps)</Label>
-                      <Input id="upload-speed" name="speed_up" type="number" placeholder="50" required />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <Label htmlFor="price">Monthly Price (KES)</Label>
-                      <Input id="price" name="price" type="number" step="0.01" placeholder="7999" required />
-                    </div>
-                    <div>
-                      <Label htmlFor="tax-rate">Tax Rate (%)</Label>
-                      <Input
-                        id="tax-rate"
-                        name="tax_rate"
-                        type="number"
-                        step="0.01"
-                        placeholder="16"
-                        defaultValue="16"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="setup-fee">Setup Fee (KES)</Label>
-                      <Input id="setup-fee" name="setup_fee" type="number" placeholder="500" defaultValue="0" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="fup-limit">FUP Limit (GB)</Label>
-                      <Input id="fup-limit" name="fup_limit" type="number" placeholder="100" />
-                      <p className="text-xs text-muted-foreground mt-1">Leave empty for unlimited</p>
-                    </div>
-                    <div>
-                      <Label htmlFor="fup-speed">FUP Speed (Mbps)</Label>
-                      <Input id="fup-speed" name="fup_speed" placeholder="5/2" />
-                      <p className="text-xs text-muted-foreground mt-1">Speed after FUP limit</p>
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea id="description" name="description" placeholder="Plan description" rows={3} />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setAddPlanOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Add Plan</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button asChild className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+            <Link href="/services/add">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Plan
+            </Link>
+          </Button>
         </div>
       </div>
 

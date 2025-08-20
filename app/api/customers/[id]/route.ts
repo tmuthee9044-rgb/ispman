@@ -127,7 +127,6 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const result = await sql`
       UPDATE customers 
       SET 
-        name = ${updateData.name || existingCustomer[0].name},
         first_name = ${updateData.first_name || existingCustomer[0].first_name || ""},
         last_name = ${updateData.last_name || existingCustomer[0].last_name || ""},
         email = ${updateData.email || existingCustomer[0].email},

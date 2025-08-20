@@ -42,6 +42,9 @@ export default function AddCustomerPage() {
   const [itemsByCategory, setItemsByCategory] = useState<Record<string, any[]>>({})
   const [selectedItems, setSelectedItems] = useState<Array<{ id: number; quantity: number; item: any }>>([])
   const [loadingInventory, setLoadingInventory] = useState(true)
+  const [equipmentSearchTerm, setEquipmentSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [showOnlyInStock, setShowOnlyInStock] = useState(true)
   const { toast } = useToast()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -298,10 +301,9 @@ export default function AddCustomerPage() {
           title: "Success!",
           description: "Customer has been added successfully.",
         })
-        // Reset form or redirect
-        event.currentTarget.reset()
-        setSelectedPlan(null)
-        setSelectedItems([])
+        setTimeout(() => {
+          window.location.href = "/customers"
+        }, 1000) // Small delay to show the success message
       } else {
         const errorData = await response.json()
         toast({
@@ -330,6 +332,64 @@ export default function AddCustomerPage() {
         </div>
       </div>
     )
+  }
+
+  const getFilteredInventoryItems = () => {
+    let filteredItems = inventoryItems
+
+    // Filter by search term
+    if (equipmentSearchTerm) {
+      filteredItems = filteredItems.filter(
+        (item) =>
+          item.name.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+          item.sku.toLowerCase().includes(equipmentSearchTerm.toLowerCase()) ||
+          item.description?.toLowerCase().includes(equipmentSearchTerm.toLowerCase()),
+      )
+    }
+
+    // Filter by category
+    if (selectedCategory !== "all") {
+      filteredItems = filteredItems.filter((item) => item.category === selectedCategory)
+    }
+
+    // Filter by stock availability
+    if (showOnlyInStock) {
+      filteredItems = filteredItems.filter((item) => item.stockQuantity > 0)
+    }
+
+    // Group by category
+    return filteredItems.reduce(
+      (acc, item) => {
+        if (!acc[item.category]) {
+          acc[item.category] = []
+        }
+        acc[item.category].push(item)
+        return acc
+      },
+      {} as Record<string, any[]>,
+    )
+  }
+
+  const addEquipmentPackage = (packageType: string) => {
+    const packages = {
+      basic: [1, 2], // Router + Modem IDs
+      standard: [1, 2, 6], // Router + Modem + Cable
+      premium: [1, 2, 5, 6, 7], // Router + Modem + AP + Cable + UPS
+      fiber: [1, 4, 6], // Router + Fiber Cable + Ethernet Cable
+    }
+
+    const packageItems = packages[packageType] || []
+    packageItems.forEach((itemId) => {
+      const item = inventoryItems.find((inv) => inv.id === itemId)
+      if (item && item.stockQuantity > 0) {
+        addInventoryItem(item)
+      }
+    })
+
+    toast({
+      title: "Package Added",
+      description: `${packageType.charAt(0).toUpperCase() + packageType.slice(1)} equipment package has been added.`,
+    })
   }
 
   return (
@@ -1138,53 +1198,171 @@ export default function AddCustomerPage() {
               </div>
             ) : (
               <>
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">Quick Equipment Packages</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto p-3 flex-col bg-transparent"
+                      onClick={() => addEquipmentPackage("basic")}
+                    >
+                      <Package className="h-4 w-4 mb-1" />
+                      <span className="text-xs">Basic Package</span>
+                      <span className="text-xs text-muted-foreground">Router + Modem</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto p-3 flex-col bg-transparent"
+                      onClick={() => addEquipmentPackage("standard")}
+                    >
+                      <Package className="h-4 w-4 mb-1" />
+                      <span className="text-xs">Standard Package</span>
+                      <span className="text-xs text-muted-foreground">+ Cables</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto p-3 flex-col bg-transparent"
+                      onClick={() => addEquipmentPackage("premium")}
+                    >
+                      <Package className="h-4 w-4 mb-1" />
+                      <span className="text-xs">Premium Package</span>
+                      <span className="text-xs text-muted-foreground">+ WiFi + UPS</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto p-3 flex-col bg-transparent"
+                      onClick={() => addEquipmentPackage("fiber")}
+                    >
+                      <Package className="h-4 w-4 mb-1" />
+                      <span className="text-xs">Fiber Package</span>
+                      <span className="text-xs text-muted-foreground">Fiber Setup</span>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">Search & Filter Equipment</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="equipment-search">Search Equipment</Label>
+                      <Input
+                        id="equipment-search"
+                        placeholder="Search by name, SKU, or description..."
+                        value={equipmentSearchTerm}
+                        onChange={(e) => setEquipmentSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category-filter">Filter by Category</Label>
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {Object.keys(itemsByCategory).map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Stock Filter</Label>
+                      <div className="flex items-center space-x-2">
+                        <Switch id="stock-filter" checked={showOnlyInStock} onCheckedChange={setShowOnlyInStock} />
+                        <Label htmlFor="stock-filter" className="text-sm">
+                          Show only in-stock items
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Available Inventory by Category */}
                 <div className="space-y-4">
                   <Label className="text-base font-medium">Available Equipment</Label>
-                  {Object.entries(itemsByCategory).map(([category, items]) => (
+                  {Object.entries(getFilteredInventoryItems()).map(([category, items]) => (
                     <div key={category} className="space-y-3">
-                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">{category}</h4>
+                      <h4 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">
+                        {category} ({items.length} items)
+                      </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {items.map((item) => (
-                          <Card key={item.id} className="p-4 hover:shadow-md transition-shadow">
-                            <div className="space-y-2">
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <h5 className="font-medium text-sm">{item.name}</h5>
-                                  <p className="text-xs text-muted-foreground">{item.sku}</p>
+                        {items.map((item) => {
+                          const isSelected = selectedItems.some((selected) => selected.id === item.id)
+                          return (
+                            <Card
+                              key={item.id}
+                              className={`p-4 hover:shadow-md transition-shadow ${
+                                isSelected ? "ring-2 ring-blue-500 bg-blue-50" : ""
+                              }`}
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h5 className="font-medium text-sm">{item.name}</h5>
+                                    <p className="text-xs text-muted-foreground">{item.sku}</p>
+                                    {isSelected && (
+                                      <p className="text-xs text-blue-600 font-medium">
+                                        ✓ Added ({selectedItems.find((s) => s.id === item.id)?.quantity || 0})
+                                      </p>
+                                    )}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={isSelected ? "default" : "outline"}
+                                    onClick={() => addInventoryItem(item)}
+                                    disabled={item.stockQuantity <= 0}
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    {isSelected ? "Add More" : "Add"}
+                                  </Button>
                                 </div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => addInventoryItem(item)}
-                                  disabled={item.stockQuantity <= 0}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add
-                                </Button>
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span>Price:</span>
+                                    <span className="font-medium">{formatCurrency(item.unitCost)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span>Stock:</span>
+                                    <span className={item.stockQuantity <= 5 ? "text-orange-600" : "text-green-600"}>
+                                      {item.stockQuantity} available
+                                    </span>
+                                  </div>
+                                  {item.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                                  )}
+                                  {item.specifications && (
+                                    <p className="text-xs text-blue-600 mt-1">{item.specifications}</p>
+                                  )}
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <div className="flex justify-between text-xs">
-                                  <span>Price:</span>
-                                  <span className="font-medium">{formatCurrency(item.unitCost)}</span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                  <span>Stock:</span>
-                                  <span className={item.stockQuantity <= 5 ? "text-orange-600" : "text-green-600"}>
-                                    {item.stockQuantity} available
-                                  </span>
-                                </div>
-                                {item.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
-                                )}
-                              </div>
-                            </div>
-                          </Card>
-                        ))}
+                            </Card>
+                          )
+                        })}
                       </div>
+                      {items.length === 0 && (
+                        <div className="text-center py-4 text-muted-foreground">
+                          <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p className="text-sm">No items found in this category</p>
+                        </div>
+                      )}
                     </div>
                   ))}
+
+                  {Object.keys(getFilteredInventoryItems()).length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium mb-2">No equipment found</p>
+                      <p className="text-sm">Try adjusting your search or filter criteria</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Selected Items Summary */}

@@ -711,15 +711,90 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
     }
   }
 
+  const handleAddService = async () => {
+    console.log("[v0] Add service clicked, selectedServicePlan:", selectedServicePlan)
+    if (!selectedServicePlan) {
+      toast({
+        title: "Error",
+        description: "Please select a service plan",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const selectedPlan = availableServicePlans.find((plan) => plan.id === selectedServicePlan)
+      console.log("[v0] Selected plan:", selectedPlan)
+
+      const response = await fetch(`/api/customers/${customer.id}/services`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_plan_id: selectedServicePlan,
+          monthly_fee: selectedPlan?.price || 0,
+          status: "active",
+          start_date: new Date().toISOString(),
+        }),
+      })
+
+      console.log("[v0] Add service response status:", response.status)
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log("[v0] Add service result:", result)
+        toast({
+          title: "Success",
+          description: "Service added successfully",
+        })
+        loadCustomerServices() // Reload services
+        setShowAddServiceModal(false)
+        setSelectedServicePlan("")
+      } else {
+        const error = await response.text()
+        console.log("[v0] Add service error:", error)
+        toast({
+          title: "Error",
+          description: "Failed to add service",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.log("[v0] Add service exception:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add service",
+        variant: "destructive",
+      })
+    }
+  }
+
   const loadAvailableServicePlans = async () => {
+    console.log("[v0] Loading available service plans...")
     try {
       const response = await fetch("/api/service-plans")
       if (response.ok) {
-        const data = await response.json()
-        setAvailableServicePlans(data.plans || [])
+        const plans = await response.json()
+        console.log("[v0] Loaded service plans:", plans)
+        setAvailableServicePlans(plans)
+      } else {
+        console.log("[v0] Failed to load service plans, response status:", response.status)
+        const fallbackPlans = [
+          { id: 1, name: "Basic Home", price: 2999, speed: "10/5 Mbps" },
+          { id: 2, name: "Standard Home", price: 4999, speed: "25/10 Mbps" },
+          { id: 3, name: "Premium Home", price: 7999, speed: "50/25 Mbps" },
+          { id: 4, name: "Business Starter", price: 14999, speed: "100/50 Mbps" },
+        ]
+        setAvailableServicePlans(fallbackPlans)
       }
     } catch (error) {
-      console.error("Failed to load service plans:", error)
+      console.log("[v0] Error loading service plans:", error)
+      const fallbackPlans = [
+        { id: 1, name: "Basic Home", price: 2999, speed: "10/5 Mbps" },
+        { id: 2, name: "Standard Home", price: 4999, speed: "25/10 Mbps" },
+        { id: 3, name: "Premium Home", price: 7999, speed: "50/25 Mbps" },
+        { id: 4, name: "Business Starter", price: 14999, speed: "100/50 Mbps" },
+      ]
+      setAvailableServicePlans(fallbackPlans)
     }
   }
 
@@ -727,36 +802,6 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
     loadCustomerServices()
     loadAvailableServicePlans()
   }, [customer.id])
-
-  const handleAddService = async () => {
-    if (!selectedServicePlan) {
-      toast.error("Please select a service plan")
-      return
-    }
-
-    try {
-      const selectedPlan = availableServicePlans.find((plan) => plan.id === selectedServicePlan)
-      const response = await fetch(`/api/customers/${customer.id}/services`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service_plan_id: selectedServicePlan,
-          monthly_fee: selectedPlan?.price || 0,
-        }),
-      })
-
-      if (response.ok) {
-        toast.success("Service added successfully")
-        loadCustomerServices() // Reload services
-        setShowAddServiceModal(false)
-        setSelectedServicePlan("")
-      } else {
-        toast.error("Failed to add service")
-      }
-    } catch (error) {
-      toast.error("Error adding service")
-    }
-  }
 
   const handleEditService = async (serviceId: string) => {
     const service = customerServices.find((s) => s.id === serviceId)

@@ -218,6 +218,7 @@ export default function ServicesPage() {
   }
 
   const handleToggleStatus = async (planId: number, currentStatus: boolean) => {
+    console.log("[v0] Toggle status clicked for plan:", planId, "current status:", currentStatus)
     try {
       // In a real implementation, this would call an API
       const newStatus = currentStatus ? "deactivated" : "activated"
@@ -229,6 +230,7 @@ export default function ServicesPage() {
       // Update local state
       setServicePlans((prev) => prev.map((plan) => (plan.id === planId ? { ...plan, active: !currentStatus } : plan)))
     } catch (error) {
+      console.log("[v0] Error toggling status:", error)
       toast({
         title: "Error",
         description: "Failed to update plan status",
@@ -238,6 +240,7 @@ export default function ServicesPage() {
   }
 
   const handleDeletePlan = async (planId: number) => {
+    console.log("[v0] Delete plan clicked for plan:", planId)
     try {
       const result = await deleteServicePlan(planId)
       if (result.success) {
@@ -254,6 +257,7 @@ export default function ServicesPage() {
         })
       }
     } catch (error) {
+      console.log("[v0] Error deleting plan:", error)
       toast({
         title: "Error",
         description: "Failed to delete service plan",

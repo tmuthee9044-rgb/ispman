@@ -274,23 +274,35 @@ export default function EditServicePlan({ params }: EditServicePlanProps) {
         service_type: basicInfo.serviceType,
         category: basicInfo.category,
         status: basicInfo.status,
+        download_speed: speedConfig.downloadSpeed[0],
+        upload_speed: speedConfig.uploadSpeed[0],
+        guaranteed_download: speedConfig.guaranteedDownload[0],
+        guaranteed_upload: speedConfig.guaranteedUpload[0],
+        burst_download: speedConfig.burstDownload[0],
+        burst_upload: speedConfig.burstUpload[0],
+        burst_duration: speedConfig.burstDuration[0],
+        aggregation_ratio: speedConfig.aggregationRatio[0],
+        priority_level: speedConfig.priorityLevel,
         price: Number.parseFloat(pricingConfig.monthlyPrice),
         setup_fee: Number.parseFloat(pricingConfig.setupFee) || 0,
         billing_cycle: pricingConfig.billingCycle,
-        contract_length: Number.parseInt(pricingConfig.contractLength) || 0,
+        contract_length: pricingConfig.contractLength || null,
         currency: pricingConfig.currency,
         tax_included: pricingConfig.taxIncluded,
         tax_rate: pricingConfig.taxRate[0],
         promo_price: pricingConfig.promoEnabled ? Number.parseFloat(pricingConfig.promoPrice) || null : null,
-        promo_duration: pricingConfig.promoEnabled ? Number.parseInt(pricingConfig.promoDuration) || null : null,
-        speed: `${speedConfig.downloadSpeed[0]}/${speedConfig.uploadSpeed[0]}`,
-        download_speed: speedConfig.downloadSpeed[0],
-        upload_speed: speedConfig.uploadSpeed[0],
-        priority_level: speedConfig.priorityLevel,
-        fup_config: JSON.stringify(fupConfig),
-        qos_config: JSON.stringify(qosConfig),
-        advanced_features: JSON.stringify(advancedFeatures),
-        restrictions: JSON.stringify(restrictions),
+        promo_enabled: pricingConfig.promoEnabled,
+        promo_duration: pricingConfig.promoEnabled ? pricingConfig.promoDuration || null : null,
+        fup_enabled: fupConfig.enabled,
+        data_limit: fupConfig.enabled ? Number.parseInt(fupConfig.dataLimit) || null : null,
+        limit_type: fupConfig.limitType,
+        action_after_limit: fupConfig.actionAfterLimit,
+        throttle_speed: fupConfig.enabled ? fupConfig.throttleSpeed[0] : null,
+        reset_day: fupConfig.resetDay,
+        warning_threshold: fupConfig.warningThreshold[0],
+        advanced_features: advancedFeatures,
+        qos_config: qosConfig,
+        restrictions: restrictions,
       }
 
       const response = await fetch(`/api/services/${params.id}`, {
@@ -309,7 +321,7 @@ export default function EditServicePlan({ params }: EditServicePlanProps) {
       toast.success("Service plan updated successfully!")
       router.push("/services")
     } catch (error) {
-      console.error("Error updating service plan:", error)
+      console.error("[v0] Error updating service plan:", error)
       toast.error(error instanceof Error ? error.message : "Failed to update service plan")
     } finally {
       setIsSaving(false)

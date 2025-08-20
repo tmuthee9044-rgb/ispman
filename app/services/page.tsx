@@ -4,11 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -36,10 +32,12 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { getServicePlans, createServicePlan, updateServicePlan, deleteServicePlan } from "@/app/actions/service-actions"
 import { formatCurrency, formatCurrencyCompact, TAX_RATES } from "@/lib/currency"
 
 export default function ServicesPage() {
+  const router = useRouter()
   const [addPlanOpen, setAddPlanOpen] = useState(false)
   const [editPlanOpen, setEditPlanOpen] = useState(false)
   const [pricingModalOpen, setPricingModalOpen] = useState(false)
@@ -468,15 +466,10 @@ export default function ServicesPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedPlan(plan)
-                                setEditPlanOpen(true)
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" asChild>
+                              <Link href={`/services/${plan.id}/edit`}>
+                                <Edit className="h-4 w-4" />
+                              </Link>
                             </Button>
                             <Button
                               variant="ghost"
@@ -796,106 +789,14 @@ export default function ServicesPage() {
               Close
             </Button>
             {selectedPlan && (
-              <Button
-                onClick={() => {
-                  setEditPlanOpen(true)
-                  setPricingModalOpen(false)
-                }}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Plan
+              <Button asChild>
+                <Link href={`/services/${selectedPlan.id}/edit`}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Plan
+                </Link>
               </Button>
             )}
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editPlanOpen} onOpenChange={setEditPlanOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Service Plan</DialogTitle>
-            <DialogDescription>Update service plan details, pricing, and FUP settings</DialogDescription>
-          </DialogHeader>
-          {selectedPlan && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                const formData = new FormData(e.currentTarget)
-                formData.append("id", selectedPlan.id.toString())
-                handleEditPlan(formData)
-              }}
-            >
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-plan-name">Plan Name</Label>
-                    <Input id="edit-plan-name" name="name" defaultValue={selectedPlan.name} required />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-category">Category</Label>
-                    <Select name="category" defaultValue={selectedPlan.category}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="residential">Residential</SelectItem>
-                        <SelectItem value="business">Business</SelectItem>
-                        <SelectItem value="enterprise">Enterprise</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-price">Monthly Price (KES)</Label>
-                    <Input
-                      id="edit-price"
-                      name="price"
-                      type="number"
-                      step="0.01"
-                      defaultValue={selectedPlan.price}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-tax-rate">Tax Rate (%)</Label>
-                    <Input
-                      id="edit-tax-rate"
-                      name="tax_rate"
-                      type="number"
-                      step="0.01"
-                      defaultValue={selectedPlan.tax_rate}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="edit-fup-limit">FUP Limit (GB)</Label>
-                    <Input
-                      id="edit-fup-limit"
-                      name="fup_limit"
-                      type="number"
-                      defaultValue={selectedPlan.fup_limit || ""}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-fup-speed">FUP Speed</Label>
-                    <Input id="edit-fup-speed" name="fup_speed" defaultValue={selectedPlan.fup_speed || ""} />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Textarea id="edit-description" name="description" defaultValue={selectedPlan.description} rows={3} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditPlanOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Update Plan</Button>
-              </DialogFooter>
-            </form>
-          )}
         </DialogContent>
       </Dialog>
     </div>

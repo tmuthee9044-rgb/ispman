@@ -35,7 +35,35 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Service plan not found" }, { status: 404 })
     }
 
-    return NextResponse.json(result[0])
+    const servicePlan = result[0]
+    const mappedData = {
+      ...servicePlan,
+      // Map speed fields to expected format
+      speed: `${servicePlan.download_speed || 100}/${servicePlan.upload_speed || 50}`,
+      setup_fee: servicePlan.setup_fee,
+      promo_price: servicePlan.promo_price,
+      promo_duration: servicePlan.promo_duration,
+      contract_length: servicePlan.contract_length,
+      // Map JSON fields
+      fup_config: servicePlan.fair_usage_policy
+        ? JSON.stringify({
+            enabled: servicePlan.fup_enabled || false,
+            dataLimit: servicePlan.data_limit?.toString() || "",
+            limitType: servicePlan.limit_type || "monthly",
+            actionAfterLimit: servicePlan.action_after_limit || "throttle",
+            throttleSpeed: servicePlan.throttle_speed || 10,
+            resetDay: servicePlan.reset_day || "1",
+            exemptHours: [],
+            exemptDays: [],
+            warningThreshold: servicePlan.warning_threshold || 80,
+          })
+        : null,
+      qos_config: servicePlan.qos_config || servicePlan.qos_settings,
+      advanced_features: servicePlan.features,
+      restrictions: servicePlan.restrictions,
+    }
+
+    return NextResponse.json(mappedData)
   } catch (error) {
     console.error("Error fetching service plan:", error)
     return NextResponse.json({ error: "Failed to fetch service plan" }, { status: 500 })

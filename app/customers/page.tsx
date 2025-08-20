@@ -654,9 +654,7 @@ export default function CustomersPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-blue-900">ISP System Integration</h3>
-                <p className="text-blue-700 mt-1">
-                  Import customers from any ISP system - Splynx, MikroTik, RADIUS, or CSV format
-                </p>
+                <p className="text-blue-700 mt-1">Import customers in bulk</p>
               </div>
               <Button className="bg-blue-600 hover:bg-blue-700" onClick={handleBulkImport} disabled={isLoading}>
                 <Upload className="mr-2 h-4 w-4" />

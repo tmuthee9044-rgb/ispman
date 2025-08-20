@@ -12,7 +12,9 @@ export async function getServicePlans() {
         id,
         name,
         description,
-        speed,
+        CONCAT(download_speed, '/', upload_speed, ' Mbps') as speed,
+        download_speed,
+        upload_speed,
         price,
         status as active,
         created_at,
@@ -42,13 +44,11 @@ export async function createServicePlan(formData: FormData) {
     const fupLimit = formData.get("fup_limit") ? Number.parseInt(formData.get("fup_limit") as string) : null
     const fupSpeed = (formData.get("fup_speed") as string) || null
 
-    const speedString = `${speedDown}/${speedUp} Mbps`
-
     const result = await sql`
       INSERT INTO service_plans (
-        name, description, speed, price, status
+        name, description, download_speed, upload_speed, price, status, category, tax_rate, setup_fee
       ) VALUES (
-        ${name}, ${description}, ${speedString}, ${price}, 'active'
+        ${name}, ${description}, ${speedDown}, ${speedUp}, ${price}, 'active', ${category}, ${taxRate}, ${setupFee}
       ) RETURNING id
     `
 

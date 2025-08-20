@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -125,14 +125,139 @@ function UsageChart({ customerId }: { customerId: number }) {
   )
 }
 
-function AddServiceModal({ open, onOpenChange, customerId, customerData }: any) {
+function AddServiceModal({ open, onOpenChange, customerId, customerData, onServiceAdded }: any) {
+  const [availableServices, setAvailableServices] = useState<any[]>([])
+  const [selectedService, setSelectedService] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadingServices, setLoadingServices] = useState(true)
+
+  useEffect(() => {
+    if (open) {
+      fetchAvailableServices()
+    }
+  }, [open])
+
+  const fetchAvailableServices = async () => {
+    try {
+      setLoadingServices(true)
+      const response = await fetch("/api/service-plans")
+      if (response.ok) {
+        const services = await response.json()
+        setAvailableServices(services)
+      }
+    } catch (error) {
+      console.error("Failed to fetch services:", error)
+    } finally {
+      setLoadingServices(false)
+    }
+  }
+
+  const handleAddService = async () => {
+    if (!selectedService) {
+      toast.error("Please select a service")
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/customers/${customerId}/services`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_plan_id: selectedService,
+          status: "active",
+          start_date: new Date().toISOString(),
+        }),
+      })
+
+      if (response.ok) {
+        toast.success("Service added successfully")
+        onServiceAdded?.()
+        onOpenChange(false)
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        toast.error(error.message || "Failed to add service")
+      }
+    } catch (error) {
+      toast.error("Error adding service")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   if (!open) return null
+
+  const selectedServiceData = availableServices.find((s) => s.id === selectedService)
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
-        <h2 className="text-lg font-semibold mb-4">Add Service</h2>
-        <p className="text-muted-foreground mb-4">Service management for customer {customerData?.name}</p>
-        <Button onClick={() => onOpenChange(false)}>Close</Button>
+      <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-lg font-semibold mb-4">Add Service for {customerData?.name}</h2>
+
+        {loadingServices ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading available services...</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <Label>Select Service Plan</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={selectedService}
+                onChange={(e) => setSelectedService(e.target.value)}
+              >
+                <option value="">Choose a service plan...</option>
+                {availableServices.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} - {formatCurrency(service.price)}/month
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedServiceData && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-medium mb-2">Service Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Name:</span>
+                    <div className="font-medium">{selectedServiceData.name}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Price:</span>
+                    <div className="font-medium">{formatCurrency(selectedServiceData.price)}/month</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Speed:</span>
+                    <div className="font-medium">{selectedServiceData.speed || "N/A"}</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Type:</span>
+                    <div className="font-medium capitalize">{selectedServiceData.service_type || "Standard"}</div>
+                  </div>
+                </div>
+                {selectedServiceData.description && (
+                  <div className="mt-2">
+                    <span className="text-gray-600">Description:</span>
+                    <p className="text-sm mt-1">{selectedServiceData.description}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-6">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={handleAddService} disabled={isLoading || !selectedService}>
+            {isLoading ? "Adding..." : "Add Service"}
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -458,6 +583,8 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
   const [customerServices, setCustomerServices] = useState([])
   const [availableServicePlans, setAvailableServicePlans] = useState([])
   const [selectedServicePlan, setSelectedServicePlan] = useState("")
+  const [selectedServiceForEdit, setSelectedServiceForEdit] = useState<any>(null)
+  const [showEditServiceModal, setShowEditServiceModal] = useState(false)
 
   const communications = [
     {
@@ -641,8 +768,15 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
   }
 
   const handleEditService = async (serviceId: string) => {
-    // Implementation for editing service
-    console.log("[v0] Editing service:", serviceId)
+    const service = customerServices.find((s) => s.id === serviceId)
+    if (!service) {
+      toast.error("Service not found")
+      return
+    }
+
+    // Set up edit service modal state
+    setSelectedServiceForEdit(service)
+    setShowEditServiceModal(true)
   }
 
   const handleSuspendService = async (serviceId: string) => {
@@ -1931,6 +2065,7 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
           phone: customer.phone,
           portal_username: customer.portal_username,
         }}
+        onServiceAdded={loadCustomerServices}
       />
       <PaymentModal
         open={showPaymentModal}
@@ -2121,6 +2256,127 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                 Cancel
               </Button>
               <Button onClick={handleServiceSuspension}>Suspend Service</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditServiceModal && selectedServiceForEdit && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-semibold mb-4">Edit Service</h2>
+
+            <div className="space-y-4">
+              <div>
+                <Label>Service Name</Label>
+                <Input
+                  value={selectedServiceForEdit.service_name || selectedServiceForEdit.name || ""}
+                  onChange={(e) =>
+                    setSelectedServiceForEdit({
+                      ...selectedServiceForEdit,
+                      service_name: e.target.value,
+                      name: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Monthly Fee (KES)</Label>
+                  <Input
+                    type="number"
+                    value={selectedServiceForEdit.monthly_fee || ""}
+                    onChange={(e) =>
+                      setSelectedServiceForEdit({
+                        ...selectedServiceForEdit,
+                        monthly_fee: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label>Speed</Label>
+                  <Input
+                    value={selectedServiceForEdit.speed || ""}
+                    onChange={(e) =>
+                      setSelectedServiceForEdit({
+                        ...selectedServiceForEdit,
+                        speed: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., 10 Mbps"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Status</Label>
+                <select
+                  className="w-full p-2 border rounded-md"
+                  value={selectedServiceForEdit.status || "active"}
+                  onChange={(e) =>
+                    setSelectedServiceForEdit({
+                      ...selectedServiceForEdit,
+                      status: e.target.value,
+                    })
+                  }
+                >
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div>
+                <Label>Next Billing Date</Label>
+                <Input
+                  type="date"
+                  value={
+                    selectedServiceForEdit.next_billing_date
+                      ? new Date(selectedServiceForEdit.next_billing_date).toISOString().split("T")[0]
+                      : ""
+                  }
+                  onChange={(e) =>
+                    setSelectedServiceForEdit({
+                      ...selectedServiceForEdit,
+                      next_billing_date: e.target.value,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setShowEditServiceModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    const response = await fetch(
+                      `/api/customers/${customer.id}/services/${selectedServiceForEdit.id}`,
+                      {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(selectedServiceForEdit),
+                      },
+                    )
+
+                    if (response.ok) {
+                      toast.success("Service updated successfully")
+                      setShowEditServiceModal(false)
+                      window.location.reload()
+                    } else {
+                      toast.error("Failed to update service")
+                    }
+                  } catch (error) {
+                    toast.error("Error updating service")
+                  }
+                }}
+              >
+                Save Changes
+              </Button>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,12 +10,153 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Upload, Building2, MapPin, Phone, Globe, Palette, FileText, Save, TestTube } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Upload,
+  Building2,
+  MapPin,
+  Phone,
+  Globe,
+  Palette,
+  FileText,
+  Save,
+  TestTube,
+  Shield,
+  Lock,
+  Eye,
+  AlertCircle,
+} from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+
+interface ContentData {
+  terms: any
+  privacy: any
+}
 
 export default function CompanySettingsPage() {
   const [activeTab, setActiveTab] = useState("basic")
   const [isLoading, setIsLoading] = useState(false)
+  const [contentData, setContentData] = useState<ContentData>({ terms: null, privacy: null })
+  const [isSavingContent, setIsSavingContent] = useState(false)
+
+  useEffect(() => {
+    if (activeTab === "localization") {
+      loadContentData()
+    }
+  }, [activeTab])
+
+  const loadContentData = async () => {
+    try {
+      const [termsResponse, privacyResponse] = await Promise.all([
+        fetch("/api/content/terms"),
+        fetch("/api/content/privacy"),
+      ])
+
+      const termsData = termsResponse.ok ? await termsResponse.json() : null
+      const privacyData = privacyResponse.ok ? await privacyResponse.json() : null
+
+      setContentData({
+        terms: termsData?.content || getDefaultTermsContent(),
+        privacy: privacyData?.content || getDefaultPrivacyContent(),
+      })
+    } catch (error) {
+      console.error("[v0] Error loading content:", error)
+      setContentData({
+        terms: getDefaultTermsContent(),
+        privacy: getDefaultPrivacyContent(),
+      })
+    }
+  }
+
+  const getDefaultTermsContent = () => ({
+    title: "Terms of Service",
+    lastUpdated: new Date().toLocaleDateString(),
+    content: {
+      introduction:
+        "Welcome to TechConnect ISP. These Terms of Service govern your use of our internet services and website.",
+      serviceDescription:
+        "TechConnect ISP provides high-speed internet connectivity services to residential and business customers.",
+      userResponsibilities:
+        "As a customer, you agree to use our services in compliance with all applicable laws and regulations.",
+      paymentTerms: "Service fees are billed monthly in advance. Payment is due within 30 days of the invoice date.",
+      serviceAvailability: "While we strive to provide continuous service, we do not guarantee 100% uptime.",
+      privacyPolicy:
+        "Your privacy is important to us. Please review our Privacy Policy to understand how we collect, use, and protect your personal information.",
+      termination: "Either party may terminate this agreement with 30 days written notice.",
+      limitation:
+        "Our liability is limited to the monthly service fee. We are not liable for indirect, incidental, or consequential damages.",
+      changes:
+        "We may modify these Terms at any time. Changes will be posted on our website and take effect 30 days after posting.",
+      contact:
+        "If you have questions about these Terms, please contact us at legal@techconnect.co.ke or call our customer service at +254 712 345 678.",
+    },
+  })
+
+  const getDefaultPrivacyContent = () => ({
+    title: "Privacy Policy",
+    lastUpdated: new Date().toLocaleDateString(),
+    content: {
+      introduction: "At TechConnect ISP, we are committed to protecting your privacy and personal information.",
+      informationCollection:
+        "We collect information you provide directly to us, such as when you create an account, contact customer service, or use our services.",
+      informationUse:
+        "We use your information to provide and maintain our services, process payments and billing, and communicate with you about your account.",
+      informationSharing: "We do not sell, trade, or rent your personal information to third parties.",
+      dataSecurity:
+        "We implement appropriate technical and organizational security measures to protect your personal information.",
+      cookies: "Our website uses cookies and similar technologies to enhance your browsing experience.",
+      userRights:
+        "You have the right to access and review your personal information, request corrections to inaccurate information.",
+      dataRetention:
+        "We retain your personal information for as long as necessary to provide our services and comply with legal obligations.",
+      childrenPrivacy: "Our services are not intended for children under 13 years of age.",
+      changes: "We may update this Privacy Policy from time to time. We will notify you of any material changes.",
+      contact:
+        "If you have questions about this Privacy Policy, please contact our Data Protection Officer at privacy@techconnect.co.ke.",
+    },
+  })
+
+  const saveContent = async (type: "terms" | "privacy", content: any) => {
+    setIsSavingContent(true)
+    try {
+      const response = await fetch(`/api/content/${type}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Content saved",
+          description: `${type === "terms" ? "Terms of Service" : "Privacy Policy"} has been updated successfully.`,
+        })
+        loadContentData() // Reload to get updated timestamps
+      } else {
+        throw new Error("Failed to save content")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to save ${type === "terms" ? "Terms of Service" : "Privacy Policy"}. Please try again.`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingContent(false)
+    }
+  }
+
+  const updateContentField = (type: "terms" | "privacy", section: string, value: string) => {
+    setContentData((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        content: {
+          ...prev[type].content,
+          [section]: value,
+        },
+      },
+    }))
+  }
 
   const handleSave = async () => {
     setIsLoading(true)
@@ -548,6 +689,205 @@ export default function CompanySettingsPage() {
                     />
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-6">
+                <div>
+                  <Label className="text-lg font-medium">Legal Content Management</Label>
+                  <p className="text-sm text-gray-600 mt-1">Manage Terms of Service and Privacy Policy content</p>
+                </div>
+
+                {/* Terms of Service Management */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2 text-base">
+                      <Shield className="h-4 w-4" />
+                      <span>Terms of Service</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Manage the content that appears on your Terms of Service page
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <a href="/terms" target="_blank" rel="noopener noreferrer">
+                            <Eye className="h-3 w-3 mr-1" />
+                            Preview Page
+                          </a>
+                        </Button>
+                        {contentData.terms?.lastUpdated && (
+                          <span className="text-xs text-gray-500">Last updated: {contentData.terms.lastUpdated}</span>
+                        )}
+                      </div>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {contentData.terms && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="terms-title">Page Title</Label>
+                          <Input
+                            id="terms-title"
+                            value={contentData.terms.title}
+                            onChange={(e) =>
+                              setContentData((prev) => ({
+                                ...prev,
+                                terms: { ...prev.terms, title: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="terms-intro">Introduction</Label>
+                            <Textarea
+                              id="terms-intro"
+                              rows={3}
+                              value={contentData.terms.content.introduction}
+                              onChange={(e) => updateContentField("terms", "introduction", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="terms-service">Service Description</Label>
+                            <Textarea
+                              id="terms-service"
+                              rows={3}
+                              value={contentData.terms.content.serviceDescription}
+                              onChange={(e) => updateContentField("terms", "serviceDescription", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="terms-payment">Payment Terms</Label>
+                            <Textarea
+                              id="terms-payment"
+                              rows={3}
+                              value={contentData.terms.content.paymentTerms}
+                              onChange={(e) => updateContentField("terms", "paymentTerms", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="terms-contact">Contact Information</Label>
+                            <Textarea
+                              id="terms-contact"
+                              rows={3}
+                              value={contentData.terms.content.contact}
+                              onChange={(e) => updateContentField("terms", "contact", e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={() => saveContent("terms", contentData.terms)}
+                          disabled={isSavingContent}
+                          className="w-full md:w-auto"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {isSavingContent ? "Saving..." : "Save Terms of Service"}
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Privacy Policy Management */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center space-x-2 text-base">
+                      <Lock className="h-4 w-4" />
+                      <span>Privacy Policy</span>
+                    </CardTitle>
+                    <CardDescription>
+                      Manage the content that appears on your Privacy Policy page
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                            <Eye className="h-3 w-3 mr-1" />
+                            Preview Page
+                          </a>
+                        </Button>
+                        {contentData.privacy?.lastUpdated && (
+                          <span className="text-xs text-gray-500">Last updated: {contentData.privacy.lastUpdated}</span>
+                        )}
+                      </div>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {contentData.privacy && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="privacy-title">Page Title</Label>
+                          <Input
+                            id="privacy-title"
+                            value={contentData.privacy.title}
+                            onChange={(e) =>
+                              setContentData((prev) => ({
+                                ...prev,
+                                privacy: { ...prev.privacy, title: e.target.value },
+                              }))
+                            }
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="privacy-intro">Introduction</Label>
+                            <Textarea
+                              id="privacy-intro"
+                              rows={3}
+                              value={contentData.privacy.content.introduction}
+                              onChange={(e) => updateContentField("privacy", "introduction", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="privacy-collection">Information Collection</Label>
+                            <Textarea
+                              id="privacy-collection"
+                              rows={3}
+                              value={contentData.privacy.content.informationCollection}
+                              onChange={(e) => updateContentField("privacy", "informationCollection", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="privacy-security">Data Security</Label>
+                            <Textarea
+                              id="privacy-security"
+                              rows={3}
+                              value={contentData.privacy.content.dataSecurity}
+                              onChange={(e) => updateContentField("privacy", "dataSecurity", e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="privacy-contact">Contact Information</Label>
+                            <Textarea
+                              id="privacy-contact"
+                              rows={3}
+                              value={contentData.privacy.content.contact}
+                              onChange={(e) => updateContentField("privacy", "contact", e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={() => saveContent("privacy", contentData.privacy)}
+                          disabled={isSavingContent}
+                          className="w-full md:w-auto"
+                        >
+                          <Save className="h-4 w-4 mr-2" />
+                          {isSavingContent ? "Saving..." : "Save Privacy Policy"}
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Changes to legal content will be immediately visible on your Terms of Service and Privacy Policy
+                    pages. Please review all content carefully before saving.
+                  </AlertDescription>
+                </Alert>
               </div>
             </CardContent>
           </Card>

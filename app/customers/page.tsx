@@ -383,7 +383,7 @@ export default function CustomersPage() {
   const handleBulkImport = async () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".csv,.json,.txt"
+    input.accept = ".csv,.xlsx,.xls,.json,.txt"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
@@ -395,31 +395,38 @@ export default function CustomersPage() {
 
         toast({
           title: "Processing file",
-          description: "Auto-detecting format and importing customers...",
+          description: "Analyzing file structure...",
         })
 
-        const response = await fetch("/api/import-customers", {
+        const response = await fetch("/api/import-customers/analyze", {
           method: "POST",
           body: formData,
         })
 
         if (response.ok) {
           const result = await response.json()
-          toast({
-            title: "Import completed",
-            description: `Successfully imported ${result.imported} customers. Format: ${result.format}`,
-          })
-          const data = await getCustomers()
-          setCustomers(data)
+
+          // Store file data in session storage
+          sessionStorage.setItem(
+            "importFileData",
+            JSON.stringify({
+              headers: result.headers,
+              rows: result.rows,
+              filename: file.name,
+            }),
+          )
+
+          // Redirect to import mapping page
+          window.location.href = "/customers/import"
         } else {
           const error = await response.json()
-          throw new Error(error.message || "Import failed")
+          throw new Error(error.message || "File analysis failed")
         }
       } catch (error) {
         console.error("[v0] Import error:", error)
         toast({
           title: "Import failed",
-          description: error instanceof Error ? error.message : "Failed to import customers",
+          description: error instanceof Error ? error.message : "Failed to analyze file",
           variant: "destructive",
         })
       } finally {

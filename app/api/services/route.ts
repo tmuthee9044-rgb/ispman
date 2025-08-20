@@ -11,6 +11,15 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Creating service plan with data:", data)
 
+    const priorityLevelMap: { [key: string]: number } = {
+      low: 1,
+      standard: 2,
+      high: 3,
+      critical: 4,
+    }
+
+    const priorityLevelInt = priorityLevelMap[speed.priorityLevel] || 2 // default to standard
+
     const result = await sql`
       INSERT INTO service_plans (
         name, description, service_type, category, status,
@@ -24,7 +33,7 @@ export async function POST(request: NextRequest) {
       ) VALUES (
         ${basic.planName}, ${basic.description}, ${basic.serviceType}, ${basic.category}, ${basic.status},
         ${speed.downloadSpeed[0]}, ${speed.uploadSpeed[0]}, ${speed.guaranteedDownload[0]}, ${speed.guaranteedUpload[0]},
-        ${speed.burstDownload[0]}, ${speed.burstUpload[0]}, ${speed.burstDuration[0]}, ${speed.aggregationRatio[0]}, ${speed.priorityLevel},
+        ${speed.burstDownload[0]}, ${speed.burstUpload[0]}, ${speed.burstDuration[0]}, ${speed.aggregationRatio[0]}, ${priorityLevelInt},
         ${Number.parseFloat(pricing.monthlyPrice) || 0}, ${Number.parseFloat(pricing.setupFee) || 0}, ${pricing.billingCycle}, ${pricing.contractLength},
         ${Number.parseFloat(pricing.promoPrice) || null}, ${pricing.promoEnabled}, ${pricing.promoDuration}, ${pricing.currency}, ${pricing.taxIncluded}, ${pricing.taxRate[0]},
         ${fup.enabled}, ${fup.dataLimit}, ${fup.limitType}, ${fup.actionAfterLimit}, ${fup.throttleSpeed[0]},

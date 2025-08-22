@@ -178,7 +178,12 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4">Add Service for {customerData?.name}</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          Add Service for{" "}
+          {customerData?.name ||
+            `${customerData?.first_name || ""} ${customerData?.last_name || ""}`.trim() ||
+            "Customer"}
+        </h2>
 
         {loadingServices ? (
           <div className="text-center py-8">
@@ -1167,20 +1172,34 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="services" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="information">Information</TabsTrigger>
-            <TabsTrigger value="finance">Finance</TabsTrigger>
-            <TabsTrigger value="support">Support</TabsTrigger>
-            <TabsTrigger value="communications">Communications</TabsTrigger>
-            <TabsTrigger value="live-view">Live View</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="services" className="space-y-6">
+          <div className="border-b">
+            <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-none lg:flex">
+              <TabsTrigger value="services" className="text-sm">
+                Services
+              </TabsTrigger>
+              <TabsTrigger value="information" className="text-sm">
+                Information
+              </TabsTrigger>
+              <TabsTrigger value="finance" className="text-sm">
+                Finance
+              </TabsTrigger>
+              <TabsTrigger value="support" className="text-sm">
+                Support
+              </TabsTrigger>
+              <TabsTrigger value="communications" className="text-sm">
+                Communications
+              </TabsTrigger>
+              <TabsTrigger value="live-view" className="text-sm">
+                Live View
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent value="services" className="space-y-4">
+          <TabsContent value="services" className="space-y-6">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <CardTitle>Customer Services</CardTitle>
                     <CardDescription>
@@ -1188,16 +1207,16 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                       {formatCurrency(customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0))}
                     </CardDescription>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setShowServiceExtensionModal(true)}>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowServiceExtensionModal(true)}>
                       <Clock className="w-4 h-4 mr-2" />
                       Extend Service
                     </Button>
-                    <Button variant="outline" onClick={() => setShowSuspendServiceModal(true)}>
+                    <Button variant="outline" size="sm" onClick={() => setShowSuspendServiceModal(true)}>
                       <Pause className="w-4 h-4 mr-2" />
                       Suspend Service
                     </Button>
-                    <Button onClick={() => setShowAddServiceModal(true)}>
+                    <Button size="sm" onClick={() => setShowAddServiceModal(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Add Service
                     </Button>

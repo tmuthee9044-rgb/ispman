@@ -416,8 +416,7 @@ export default function CustomersPage() {
             }),
           )
 
-          // Redirect to import mapping page
-          window.location.href = "/customers/import"
+          window.location.href = "/import?type=customers"
         } else {
           const error = await response.json()
           throw new Error(error.message || "File analysis failed")

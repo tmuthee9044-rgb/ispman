@@ -158,32 +158,51 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
       setIsLoading(true)
       const selectedServiceData = availableServices.find((s) => s.id === selectedService)
 
+      if (!selectedServiceData) {
+        alert("Selected service not found")
+        return
+      }
+
+      // Calculate next billing date (30 days from now)
+      const installationDate = new Date()
+      const nextBillingDate = new Date(installationDate)
+      nextBillingDate.setDate(nextBillingDate.getDate() + 30)
+
+      const requestData = {
+        service_plan_id: Number.parseInt(selectedService),
+        status: "active",
+        monthly_fee: Number.parseFloat(selectedServiceData.price || selectedServiceData.monthly_fee || 0),
+        installation_date: installationDate.toISOString().split("T")[0], // YYYY-MM-DD format
+        next_billing_date: nextBillingDate.toISOString().split("T")[0], // YYYY-MM-DD format
+        auto_renewal: true,
+        ip_address: null,
+        router_id: null,
+        notes: `Service added for ${customerData?.first_name || "Customer"} ${customerData?.last_name || ""}`,
+      }
+
+      console.log("[v0] Sending add service request:", requestData)
+
       const response = await fetch(`/api/customers/${customerId}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service_plan_id: selectedService,
-          status: "active",
-          monthly_fee: selectedServiceData?.price || selectedServiceData?.monthly_fee || 0,
-          installation_date: new Date().toISOString(),
-          next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          auto_renewal: true,
-        }),
+        body: JSON.stringify(requestData),
       })
 
       if (response.ok) {
+        const result = await response.json()
+        console.log("[v0] Service added successfully:", result)
         alert("Service added successfully")
         onServiceAdded?.()
         onOpenChange(false)
         setSelectedService("")
       } else {
         const errorData = await response.text()
-        console.error("API Error:", errorData)
-        alert("Failed to add service. Please try again.")
+        console.error("[v0] API Error:", errorData)
+        alert(`Failed to add service: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
-      console.error("Error adding service:", error)
-      alert("Error adding service. Please check your connection.")
+      console.error("[v0] Error adding service:", error)
+      alert("Error adding service. Please check your connection and try again.")
     } finally {
       setIsLoading(false)
     }
@@ -738,10 +757,10 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
 
   const loadCustomerServicesData = async () => {
     try {
-      const response = await fetch(`/api/customers/${customer.id}/services`)
+      const response = await fetch(`/api/customers/${customer?.id}/services`)
       if (response.ok) {
-        const data = await response.json()
-        setCustomerServices(data.services || [])
+        const services = await response.json()
+        setCustomerServices(services || [])
       }
     } catch (error) {
       console.error("Failed to load customer services:", error)

@@ -128,10 +128,14 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
       const response = await fetch("/api/service-plans")
       if (response.ok) {
         const services = await response.json()
-        setAvailableServices(services)
+        setAvailableServices(services || [])
+      } else {
+        console.error("Failed to fetch services:", response.statusText)
+        setAvailableServices([])
       }
     } catch (error) {
       console.error("Failed to fetch services:", error)
+      setAvailableServices([])
     } finally {
       setLoadingServices(false)
     }
@@ -139,7 +143,7 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
 
   const handleAddService = async () => {
     if (!selectedService) {
-      toast.error("Please select a service")
+      alert("Please select a service")
       return
     }
 
@@ -156,16 +160,17 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
       })
 
       if (response.ok) {
-        toast.success("Service added successfully")
+        alert("Service added successfully")
         onServiceAdded?.()
         onOpenChange(false)
         window.location.reload()
       } else {
         const error = await response.json()
-        toast.error(error.message || "Failed to add service")
+        alert(error.message || "Failed to add service")
       }
     } catch (error) {
-      toast.error("Error adding service")
+      console.error("Error adding service:", error)
+      alert("Error adding service")
     } finally {
       setIsLoading(false)
     }
@@ -175,25 +180,29 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
 
   const selectedServiceData = availableServices.find((s) => s.id === selectedService)
 
+  const customerName =
+    customerData?.first_name && customerData?.last_name
+      ? `${customerData.first_name} ${customerData.last_name}`.trim()
+      : customerData?.name || "Customer"
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4">
-          Add Service for{" "}
-          {customerData?.name ||
-            `${customerData?.first_name || ""} ${customerData?.last_name || ""}`.trim() ||
-            "Customer"}
-        </h2>
+        <h2 className="text-lg font-semibold mb-4">Add Service for {customerName}</h2>
 
         {loadingServices ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p>Loading available services...</p>
           </div>
+        ) : availableServices.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No services available. Please create service plans first.</p>
+          </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <Label>Select Service Plan</Label>
+              <label className="block text-sm font-medium mb-2">Select Service Plan</label>
               <select
                 className="w-full p-2 border rounded-md"
                 value={selectedService}
@@ -202,7 +211,7 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
                 <option value="">Choose a service plan...</option>
                 {availableServices.map((service) => (
                   <option key={service.id} value={service.id}>
-                    {service.name} - {formatCurrency(service.price)}/month
+                    {service.name} - ${service.price || 0}/month
                   </option>
                 ))}
               </select>
@@ -218,11 +227,11 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
                   </div>
                   <div>
                     <span className="text-gray-600">Price:</span>
-                    <div className="font-medium">{formatCurrency(selectedServiceData.price)}/month</div>
+                    <div className="font-medium">${selectedServiceData.price || 0}/month</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Speed:</span>
-                    <div className="font-medium">{selectedServiceData.speed || "N/A"}</div>
+                    <div className="font-medium">{selectedServiceData.download_speed || "N/A"} Mbps</div>
                   </div>
                   <div>
                     <span className="text-gray-600">Type:</span>
@@ -241,12 +250,20 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
         )}
 
         <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+          <button
+            className="px-4 py-2 border rounded-md hover:bg-gray-50"
+            onClick={() => onOpenChange(false)}
+            disabled={isLoading}
+          >
             Cancel
-          </Button>
-          <Button onClick={handleAddService} disabled={isLoading || !selectedService}>
+          </button>
+          <button
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            onClick={handleAddService}
+            disabled={isLoading || !selectedService}
+          >
             {isLoading ? "Adding..." : "Add Service"}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
@@ -1174,25 +1191,27 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
         {/* Main Content Tabs */}
         <Tabs defaultValue="services" className="space-y-6">
           <div className="border-b">
-            <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-none lg:flex">
-              <TabsTrigger value="services" className="text-sm">
-                Services
-              </TabsTrigger>
-              <TabsTrigger value="information" className="text-sm">
-                Information
-              </TabsTrigger>
-              <TabsTrigger value="finance" className="text-sm">
-                Finance
-              </TabsTrigger>
-              <TabsTrigger value="support" className="text-sm">
-                Support
-              </TabsTrigger>
-              <TabsTrigger value="communications" className="text-sm">
-                Communications
-              </TabsTrigger>
-              <TabsTrigger value="live-view" className="text-sm">
-                Live View
-              </TabsTrigger>
+            <TabsList className="h-auto p-1 bg-muted/50 w-full justify-start">
+              <div className="flex overflow-x-auto gap-1 min-w-full">
+                <TabsTrigger value="services" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Services
+                </TabsTrigger>
+                <TabsTrigger value="information" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Information
+                </TabsTrigger>
+                <TabsTrigger value="finance" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Finance
+                </TabsTrigger>
+                <TabsTrigger value="support" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Support
+                </TabsTrigger>
+                <TabsTrigger value="communications" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Communications
+                </TabsTrigger>
+                <TabsTrigger value="live-view" className="text-sm px-4 py-2 whitespace-nowrap">
+                  Live View
+                </TabsTrigger>
+              </div>
             </TabsList>
           </div>
 

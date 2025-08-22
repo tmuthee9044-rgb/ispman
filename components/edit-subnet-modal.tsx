@@ -36,8 +36,7 @@ export default function EditSubnetModal({ subnet, children }: EditSubnetModalPro
     startTransition(async () => {
       try {
         setError(null)
-        const boundAction = updateSubnet.bind(null, subnet.id)
-        const result = await boundAction(null, formData)
+        const result = await updateSubnet(formData)
 
         if (result?.success) {
           toast.success(result.message || "Subnet updated successfully")

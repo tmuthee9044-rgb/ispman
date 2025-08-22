@@ -33,7 +33,7 @@ export default function AllocateIPModal({ subnets, children }: AllocateIPModalPr
     startTransition(async () => {
       try {
         setError(null)
-        const result = await allocateIP(null, formData)
+        const result = await allocateIP(formData)
 
         if (result?.success) {
           toast.success(result.message || "IP address allocated successfully")

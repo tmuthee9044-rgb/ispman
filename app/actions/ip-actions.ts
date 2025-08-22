@@ -6,18 +6,20 @@ export async function createSubnet(formData: FormData) {
   // Simulate API delay
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const name = formData.get("name") as string
-  const network = formData.get("network") as string
-  const cidr = Number.parseInt(formData.get("cidr") as string)
-  const type = formData.get("type") as "ipv4" | "ipv6"
-  const gateway = formData.get("gateway") as string
-  const dns_primary = formData.get("dns_primary") as string
-  const dns_secondary = formData.get("dns_secondary") as string
+  const name = formData.get("name")?.toString() || ""
+  const network = formData.get("network")?.toString() || ""
+  const cidrValue = formData.get("cidr")?.toString()
+  const cidr = cidrValue ? Number.parseInt(cidrValue) : 0
+  const type = (formData.get("type")?.toString() || "ipv4") as "ipv4" | "ipv6"
+  const gateway = formData.get("gateway")?.toString() || ""
+  const dns_primary = formData.get("dns_primary")?.toString() || ""
+  const dns_secondary = formData.get("dns_secondary")?.toString() || ""
   const dhcp_enabled = formData.get("dhcp_enabled") === "on"
-  const dhcp_start = formData.get("dhcp_start") as string
-  const dhcp_end = formData.get("dhcp_end") as string
-  const vlan_id = formData.get("vlan_id") ? Number.parseInt(formData.get("vlan_id") as string) : undefined
-  const description = formData.get("description") as string
+  const dhcp_start = formData.get("dhcp_start")?.toString() || ""
+  const dhcp_end = formData.get("dhcp_end")?.toString() || ""
+  const vlanIdValue = formData.get("vlan_id")?.toString()
+  const vlan_id = vlanIdValue ? Number.parseInt(vlanIdValue) : undefined
+  const description = formData.get("description")?.toString() || ""
 
   // Here you would typically save to database
   console.log("Creating subnet:", {
@@ -43,16 +45,17 @@ export async function updateSubnet(id: number, formData: FormData) {
   // Simulate API delay
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const name = formData.get("name") as string
-  const gateway = formData.get("gateway") as string
-  const dns_primary = formData.get("dns_primary") as string
-  const dns_secondary = formData.get("dns_secondary") as string
+  const name = formData.get("name")?.toString() || ""
+  const gateway = formData.get("gateway")?.toString() || ""
+  const dns_primary = formData.get("dns_primary")?.toString() || ""
+  const dns_secondary = formData.get("dns_secondary")?.toString() || ""
   const dhcp_enabled = formData.get("dhcp_enabled") === "on"
-  const dhcp_start = formData.get("dhcp_start") as string
-  const dhcp_end = formData.get("dhcp_end") as string
-  const vlan_id = formData.get("vlan_id") ? Number.parseInt(formData.get("vlan_id") as string) : undefined
-  const description = formData.get("description") as string
-  const status = formData.get("status") as "active" | "inactive"
+  const dhcp_start = formData.get("dhcp_start")?.toString() || ""
+  const dhcp_end = formData.get("dhcp_end")?.toString() || ""
+  const vlanIdValue = formData.get("vlan_id")?.toString()
+  const vlan_id = vlanIdValue ? Number.parseInt(vlanIdValue) : undefined
+  const description = formData.get("description")?.toString() || ""
+  const status = (formData.get("status")?.toString() || "active") as "active" | "inactive"
 
   console.log("Updating subnet:", id, {
     name,
@@ -85,12 +88,14 @@ export async function allocateIP(formData: FormData) {
   // Simulate API delay
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
-  const subnet_id = Number.parseInt(formData.get("subnet_id") as string)
-  const ip_address = formData.get("ip_address") as string
-  const mac_address = formData.get("mac_address") as string
-  const hostname = formData.get("hostname") as string
-  const customer_id = formData.get("customer_id") ? Number.parseInt(formData.get("customer_id") as string) : undefined
-  const device_type = formData.get("device_type") as "router" | "customer" | "server" | "other"
+  const subnetIdValue = formData.get("subnet_id")?.toString()
+  const subnet_id = subnetIdValue ? Number.parseInt(subnetIdValue) : 0
+  const ip_address = formData.get("ip_address")?.toString() || ""
+  const mac_address = formData.get("mac_address")?.toString() || ""
+  const hostname = formData.get("hostname")?.toString() || ""
+  const customerIdValue = formData.get("customer_id")?.toString()
+  const customer_id = customerIdValue ? Number.parseInt(customerIdValue) : undefined
+  const device_type = (formData.get("device_type")?.toString() || "other") as "router" | "customer" | "server" | "other"
 
   console.log("Allocating IP:", {
     subnet_id,

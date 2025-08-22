@@ -34,7 +34,7 @@ export default function AddSubnetModal({ children }: AddSubnetModalProps) {
     startTransition(async () => {
       try {
         setError(null)
-        const result = await createSubnet(null, formData)
+        const result = await createSubnet(formData)
 
         if (result?.success) {
           toast.success(result.message || "Subnet created successfully")

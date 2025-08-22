@@ -9,7 +9,7 @@ import { MapPin, Navigation, Search } from "lucide-react"
 
 interface MapPickerProps {
   title: string
-  onLocationSelect: (lat: number, lng: number) => void
+  onLocationSelect: (lat: number, lng: number, address?: string) => void
   initialLat: number
   initialLng: number
   height?: string
@@ -38,7 +38,7 @@ export default function MapPicker({
     if (!isNaN(numValue)) {
       const newCoords = { ...coordinates, [field]: numValue }
       setCoordinates(newCoords)
-      onLocationSelect(newCoords.lat, newCoords.lng)
+      onLocationSelect(newCoords.lat, newCoords.lng, address || undefined)
     }
   }
 
@@ -49,7 +49,7 @@ export default function MapPicker({
         (position) => {
           const { latitude, longitude } = position.coords
           setCoordinates({ lat: latitude, lng: longitude })
-          onLocationSelect(latitude, longitude)
+          onLocationSelect(latitude, longitude, "Current Location")
           setIsLoading(false)
         },
         (error) => {
@@ -84,7 +84,7 @@ export default function MapPicker({
       if (found) {
         const location = kenyaLocations[found]
         setCoordinates(location)
-        onLocationSelect(location.lat, location.lng)
+        onLocationSelect(location.lat, location.lng, address)
       }
     } catch (error) {
       console.error("Error searching address:", error)
@@ -194,7 +194,7 @@ export default function MapPicker({
                 size="sm"
                 onClick={() => {
                   setCoordinates({ lat: location.lat, lng: location.lng })
-                  onLocationSelect(location.lat, location.lng)
+                  onLocationSelect(location.lat, location.lng, location.name)
                 }}
                 className="text-xs"
               >

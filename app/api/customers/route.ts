@@ -33,6 +33,8 @@ export async function POST(request: Request) {
     const alternateEmail = formData.get("alternate_email") as string
     const customerType = (formData.get("customer_type") as string) || "individual"
     const contactPerson = formData.get("contact_person") as string
+    const dateOfBirth = formData.get("date_of_birth") as string
+    const gender = formData.get("gender") as string
     const idNumber = formData.get("national_id") as string
     const taxNumber = formData.get("tax_id") as string
     const businessName = formData.get("business_name") as string
@@ -44,15 +46,21 @@ export async function POST(request: Request) {
     const state = formData.get("physical_county") as string
     const postalCode = formData.get("physical_postal_code") as string
     const country = formData.get("physical_country") as string
-    const billingAddress = formData.get("billing_address") as string
-    const installationAddress = formData.get("installation_address") as string
 
-    // GPS coordinates
+    const billingAddress = (formData.get("billing_address") as string) || address
+    const billingCity = (formData.get("billing_city") as string) || city
+    const billingState = (formData.get("billing_county") as string) || state
+    const billingPostalCode = (formData.get("billing_postal_code") as string) || postalCode
+    const billingCountry = (formData.get("billing_country") as string) || country
+
+    const installationAddress = address
+
     const physicalLat = formData.get("physical_lat") as string
     const physicalLng = formData.get("physical_lng") as string
     const billingLat = formData.get("billing_lat") as string
     const billingLng = formData.get("billing_lng") as string
     const gpsCoordinates = physicalLat && physicalLng ? `${physicalLat},${physicalLng}` : null
+    const billingGpsCoordinates = billingLat && billingLng ? `${billingLat},${billingLng}` : gpsCoordinates
 
     // Portal credentials
     const portalUsername = formData.get("portal_username") as string
@@ -87,8 +95,19 @@ export async function POST(request: Request) {
     // Generate unique account number
     const accountNumber = `ACC${Date.now()}`
 
-    // Get primary phone number from form
-    const phone = (formData.get("phone_0") as string) || (formData.get("phone") as string)
+    let phone = formData.get("phone") as string
+    if (!phone) {
+      // Try to get the first phone number from dynamic fields
+      let phoneIndex = 0
+      while (formData.get(`phone_${phoneIndex}`)) {
+        const phoneNumber = formData.get(`phone_${phoneIndex}`) as string
+        if (phoneNumber) {
+          phone = phoneNumber
+          break
+        }
+        phoneIndex++
+      }
+    }
 
     if (email) {
       const existingCustomer = await sql`
@@ -135,21 +154,21 @@ export async function POST(request: Request) {
 
     const result = await sql`
       INSERT INTO customers (
-        first_name, last_name, email, phone, address, city, state, postal_code, country,
-        billing_address, installation_address, gps_coordinates, portal_username, portal_password,
-        preferred_contact_method, referral_source, assigned_staff_id, service_preferences,
-        account_number, status, customer_type, id_number, tax_number, business_name, business_type,
-        special_requirements, internal_notes, sales_rep, account_manager,
-        created_at, updated_at
+        first_name, last_name, email, alternate_email, phone, address, city, state, postal_code, country,
+        billing_address, installation_address, gps_coordinates, billing_gps_coordinates, 
+        portal_username, portal_password, preferred_contact_method, referral_source, assigned_staff_id, 
+        service_preferences, account_number, status, customer_type, contact_person, date_of_birth, gender,
+        id_number, tax_number, business_name, business_type, special_requirements, internal_notes, 
+        sales_rep, account_manager, created_at, updated_at
       )
       VALUES (
-        ${firstName}, ${lastName}, ${email}, ${phone}, ${address}, ${city}, ${state}, 
-        ${postalCode}, ${country}, ${billingAddress}, ${installationAddress}, ${gpsCoordinates},
+        ${firstName}, ${lastName}, ${email}, ${alternateEmail}, ${phone}, ${address}, ${city}, ${state}, 
+        ${postalCode}, ${country}, ${billingAddress}, ${installationAddress}, ${gpsCoordinates}, ${billingGpsCoordinates},
         ${portalUsername}, ${portalPassword}, ${preferredContactMethod}, ${referralSource}, 
         ${assignedStaffId}, ${JSON.stringify(servicePreferences)}, ${accountNumber}, 'pending',
-        ${customerType}, ${idNumber}, ${taxNumber}, ${businessName}, ${businessType},
-        ${specialRequirements}, ${internalNotes}, ${salesRep}, ${accountManager},
-        NOW(), NOW()
+        ${customerType}, ${contactPerson}, ${dateOfBirth ? new Date(dateOfBirth) : null}, ${gender},
+        ${idNumber}, ${taxNumber}, ${businessName}, ${businessType}, ${specialRequirements}, ${internalNotes}, 
+        ${salesRep}, ${accountManager}, NOW(), NOW()
       )
       RETURNING *
     `

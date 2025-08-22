@@ -149,13 +149,18 @@ function AddServiceModal({ open, onOpenChange, customerId, customerData, onServi
 
     try {
       setIsLoading(true)
+      const selectedServiceData = availableServices.find((s) => s.id === selectedService)
+
       const response = await fetch(`/api/customers/${customerId}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           service_plan_id: selectedService,
           status: "active",
-          start_date: new Date().toISOString(),
+          monthly_fee: selectedServiceData?.price || 0,
+          installation_date: new Date().toISOString(),
+          next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          auto_renewal: true,
         }),
       })
 

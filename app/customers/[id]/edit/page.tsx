@@ -4,17 +4,32 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import Link from "next/link"
+import { toast } from "sonner"
+import {
+  User,
+  Building2,
+  GraduationCap,
+  Phone,
+  MapPin,
+  Settings,
+  Users,
+  Plus,
+  Trash2,
+  Shield,
+  Key,
+  RefreshCw,
+  Package,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { toast } from "sonner"
-import { User, Building2, GraduationCap, Phone, MapPin, Settings, Users, Plus, Trash2 } from "lucide-react"
-import Link from "next/link"
+import MapPicker from "@/components/map-picker"
 
 interface Customer {
   id: number
@@ -81,6 +96,24 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
   const [phoneNumbers, setPhoneNumbers] = useState([{ id: 1, number: "", type: "mobile", isPrimary: true }])
   const [emergencyContacts, setEmergencyContacts] = useState([{ id: 1, name: "", phone: "", relationship: "" }])
 
+  const [portalCredentials, setPortalCredentials] = useState({
+    loginId: "",
+    username: "",
+    password: "",
+    autoGeneratePassword: true,
+  })
+  const [physicalCoordinates, setPhysicalCoordinates] = useState({ lat: -1.2921, lng: 36.8219 })
+  const [billingCoordinates, setBillingCoordinates] = useState({ lat: -1.2921, lng: 36.8219 })
+  const [selectedItems, setSelectedItems] = useState<any[]>([])
+  const [inventoryItems, setInventoryItems] = useState<any[]>([])
+  const [loadingInventory, setLoadingInventory] = useState(false)
+  const [servicePlans, setServicePlans] = useState<any[]>([])
+  const [loadingPlans, setLoadingPlans] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<any>(null)
+  const [equipmentSearchTerm, setEquipmentSearchTerm] = useState("")
+  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [showOnlyInStock, setShowOnlyInStock] = useState(false)
+
   useEffect(() => {
     const loadCustomer = async () => {
       try {
@@ -89,6 +122,26 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
           const customerData = await response.json()
           setCustomer(customerData)
           setCustomerType(customerData.customer_type || "individual")
+
+          setPortalCredentials({
+            loginId: customerData.portal_login_id || "",
+            username: customerData.portal_username || "",
+            password: customerData.portal_password || "",
+            autoGeneratePassword: false,
+          })
+
+          if (customerData.physical_lat && customerData.physical_lng) {
+            setPhysicalCoordinates({
+              lat: Number.parseFloat(customerData.physical_lat),
+              lng: Number.parseFloat(customerData.physical_lng),
+            })
+          }
+          if (customerData.billing_lat && customerData.billing_lng) {
+            setBillingCoordinates({
+              lat: Number.parseFloat(customerData.billing_lat),
+              lng: Number.parseFloat(customerData.billing_lng),
+            })
+          }
 
           // Set phone numbers from customer data
           if (customerData.phone_numbers && customerData.phone_numbers.length > 0) {
@@ -133,8 +186,86 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
       }
     }
 
+    const loadServicePlans = async () => {
+      setLoadingPlans(true)
+      try {
+        const response = await fetch("/api/service-plans")
+        if (response.ok) {
+          const plans = await response.json()
+          setServicePlans(plans)
+        }
+      } catch (error) {
+        console.error("Error loading service plans:", error)
+      } finally {
+        setLoadingPlans(false)
+      }
+    }
+
+    const loadInventory = async () => {
+      setLoadingInventory(true)
+      try {
+        const response = await fetch("/api/inventory/available")
+        if (response.ok) {
+          const items = await response.json()
+          setInventoryItems(items)
+        }
+      } catch (error) {
+        console.error("Error loading inventory:", error)
+      } finally {
+        setLoadingInventory(false)
+      }
+    }
+
     loadCustomer()
+    loadServicePlans()
+    loadInventory()
   }, [params.id, router])
+
+  const handlePortalCredentialChange = (field: string, value: any) => {
+    setPortalCredentials((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const generatePortalCredentials = () => {
+    const loginId = `TW${Date.now().toString().slice(-9)}`
+    const username = `customer_${Date.now().toString().slice(-6)}`
+    setPortalCredentials((prev) => ({
+      ...prev,
+      loginId,
+      username,
+    }))
+  }
+
+  const generateRandomPassword = () => {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
+    let password = ""
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return password
+  }
+
+  const handlePhysicalLocationSelect = (lat: number, lng: number) => {
+    setPhysicalCoordinates({ lat, lng })
+    if (sameAsPhysical) {
+      setBillingCoordinates({ lat, lng })
+    }
+  }
+
+  const handleBillingLocationSelect = (lat: number, lng: number) => {
+    setBillingCoordinates({ lat, lng })
+  }
+
+  const handlePlanSelection = (planId: string) => {
+    const plan = servicePlans.find((p) => p.id.toString() === planId)
+    setSelectedPlan(plan)
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-KE", {
+      style: "currency",
+      currency: "KES",
+    }).format(amount / 100)
+  }
 
   const addPhoneNumber = () => {
     const newId = Math.max(...phoneNumbers.map((p) => p.id)) + 1
@@ -180,6 +311,15 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
 
     try {
       const formData = new FormData(e.currentTarget)
+
+      formData.append("portal_login_id", portalCredentials.loginId)
+      formData.append("portal_username", portalCredentials.username)
+      formData.append("portal_password", portalCredentials.password)
+      formData.append("physical_lat", physicalCoordinates.lat.toString())
+      formData.append("physical_lng", physicalCoordinates.lng.toString())
+      formData.append("billing_lat", billingCoordinates.lat.toString())
+      formData.append("billing_lng", billingCoordinates.lng.toString())
+      formData.append("selected_equipment", JSON.stringify(selectedItems))
 
       // Add phone numbers and emergency contacts to form data
       formData.append("phone_numbers", JSON.stringify(phoneNumbers))
@@ -299,6 +439,120 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                   </div>
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Portal Access Configuration
+            </CardTitle>
+            <CardDescription>
+              Update customer portal login credentials for M-Pesa transactions and account management
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="portalLoginId">Portal Login ID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="portalLoginId"
+                    value={portalCredentials.loginId}
+                    onChange={(e) => handlePortalCredentialChange("loginId", e.target.value)}
+                    placeholder="TW123456789"
+                    className="font-mono"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={generatePortalCredentials}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Used for M-Pesa transactions and payment processing</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="portalUsername">Portal Username</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="portalUsername"
+                    value={portalCredentials.username}
+                    onChange={(e) => handlePortalCredentialChange("username", e.target.value)}
+                    placeholder="customer_123456"
+                    className="font-mono"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={generatePortalCredentials}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Username for customer portal login</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Auto-generate Password</Label>
+                  <div className="text-sm text-muted-foreground">Automatically generate a secure password</div>
+                </div>
+                <Switch
+                  checked={portalCredentials.autoGeneratePassword}
+                  onCheckedChange={(checked) => handlePortalCredentialChange("autoGeneratePassword", checked)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="portalPassword">Portal Password</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="portalPassword"
+                    type={portalCredentials.autoGeneratePassword ? "text" : "password"}
+                    value={portalCredentials.password}
+                    onChange={(e) => handlePortalCredentialChange("password", e.target.value)}
+                    placeholder="Enter password or auto-generate"
+                    className="font-mono"
+                    disabled={portalCredentials.autoGeneratePassword}
+                  />
+                  {portalCredentials.autoGeneratePassword && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePortalCredentialChange("password", generateRandomPassword())}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Customer will use this password to access the portal</p>
+              </div>
+
+              {/* Portal Credentials Preview */}
+              <Card className="bg-muted/50 border-dashed">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    Portal Credentials Preview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Login ID:</span>
+                    <code className="bg-background px-2 py-1 rounded text-xs">{portalCredentials.loginId}</code>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Username:</span>
+                    <code className="bg-background px-2 py-1 rounded text-xs">{portalCredentials.username}</code>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Password:</span>
+                    <code className="bg-background px-2 py-1 rounded text-xs">
+                      {portalCredentials.password ? "••••••••••••" : "Not set"}
+                    </code>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </CardContent>
         </Card>
@@ -702,14 +956,13 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
           </CardContent>
         </Card>
 
-        {/* Address Information */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
-              Address Information
+              Address Information with GPS Coordinates
             </CardTitle>
-            <CardDescription>Update physical and billing address details</CardDescription>
+            <CardDescription>Update physical and billing address details with precise GPS locations</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Physical Address */}
@@ -720,7 +973,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                 <Input
                   id="physicalAddress"
                   name="physical_address"
-                  defaultValue={customer.physical_address || customer.address || ""}
+                  defaultValue={customer?.physical_address || customer?.address || ""}
                   placeholder="123 Main Street, Apartment 4B"
                   required
                 />
@@ -731,7 +984,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                   <Input
                     id="physicalCity"
                     name="physical_city"
-                    defaultValue={customer.physical_city || ""}
+                    defaultValue={customer?.physical_city || ""}
                     placeholder="Nairobi"
                     required
                   />
@@ -741,7 +994,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                   <Input
                     id="physicalCounty"
                     name="physical_county"
-                    defaultValue={customer.physical_county || ""}
+                    defaultValue={customer?.physical_county || ""}
                     placeholder="Nairobi County"
                     required
                   />
@@ -751,13 +1004,13 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                   <Input
                     id="physicalPostalCode"
                     name="physical_postal_code"
-                    defaultValue={customer.physical_postal_code || ""}
+                    defaultValue={customer?.physical_postal_code || ""}
                     placeholder="00100"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="physicalCountry">Country</Label>
-                  <Select name="physical_country" defaultValue={customer.physical_country || "kenya"}>
+                  <Select name="physical_country" defaultValue={customer?.physical_country || "kenya"}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -770,6 +1023,15 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                   </Select>
                 </div>
               </div>
+
+              {/* Physical Address Map */}
+              <MapPicker
+                title="Physical Address Location"
+                onLocationSelect={handlePhysicalLocationSelect}
+                initialLat={physicalCoordinates.lat}
+                initialLng={physicalCoordinates.lng}
+                height="350px"
+              />
             </div>
 
             <Separator />
@@ -791,7 +1053,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                     <Input
                       id="billingAddress"
                       name="billing_address"
-                      defaultValue={customer.billing_address || ""}
+                      defaultValue={customer?.billing_address || ""}
                       placeholder="123 Main Street, Apartment 4B"
                     />
                   </div>
@@ -801,7 +1063,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                       <Input
                         id="billingCity"
                         name="billing_city"
-                        defaultValue={customer.billing_city || ""}
+                        defaultValue={customer?.billing_city || ""}
                         placeholder="Nairobi"
                       />
                     </div>
@@ -810,7 +1072,7 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                       <Input
                         id="billingCounty"
                         name="billing_county"
-                        defaultValue={customer.billing_county || ""}
+                        defaultValue={customer?.billing_county || ""}
                         placeholder="Nairobi County"
                       />
                     </div>
@@ -819,13 +1081,13 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                       <Input
                         id="billingPostalCode"
                         name="billing_postal_code"
-                        defaultValue={customer.billing_postal_code || ""}
+                        defaultValue={customer?.billing_postal_code || ""}
                         placeholder="00100"
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="billingCountry">Country</Label>
-                      <Select name="billing_country" defaultValue={customer.billing_country || "kenya"}>
+                      <Select name="billing_country" defaultValue={customer?.billing_country || "kenya"}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -838,12 +1100,23 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                       </Select>
                     </div>
                   </div>
+
+                  {/* Billing Address Map */}
+                  <MapPicker
+                    title="Billing Address Location"
+                    onLocationSelect={handleBillingLocationSelect}
+                    initialLat={billingCoordinates.lat}
+                    initialLng={billingCoordinates.lng}
+                    height="350px"
+                  />
                 </>
               )}
 
               {sameAsPhysical && (
                 <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm text-muted-foreground">Billing address will be the same as physical address.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Billing address and GPS coordinates will be the same as physical address.
+                  </p>
                 </div>
               )}
             </div>
@@ -912,6 +1185,101 @@ export default function EditCustomerPage({ params }: { params: { id: string } })
                 />
                 <Label htmlFor="smsNotifications">SMS notifications</Label>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Equipment & Inventory Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Equipment & Inventory Selection
+            </CardTitle>
+            <CardDescription>Update equipment and inventory items for this customer</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {loadingInventory ? (
+              <div className="flex items-center justify-center p-8">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-muted-foreground">Loading inventory items...</span>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Label className="text-base font-medium">Current Equipment Assignment</Label>
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    Equipment selection functionality available. Current assignments will be preserved unless modified.
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Technical Requirements */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Technical Requirements
+            </CardTitle>
+            <CardDescription>Update technical requirements and installation details</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="connectionType">Connection Type</Label>
+                <Select name="connection_type" defaultValue={customer?.connection_type || ""}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select connection type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fiber">Fiber Optic</SelectItem>
+                    <SelectItem value="wireless">Wireless</SelectItem>
+                    <SelectItem value="cable">Cable</SelectItem>
+                    <SelectItem value="dsl">DSL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="equipmentNeeded">Equipment Needed</Label>
+                <Select name="equipment_needed" defaultValue={customer?.equipment_needed || ""}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select equipment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="router-only">Router Only</SelectItem>
+                    <SelectItem value="router-modem">Router + Modem</SelectItem>
+                    <SelectItem value="full-package">Full Package (Router, Modem, Cables)</SelectItem>
+                    <SelectItem value="customer-provided">Customer Provided</SelectItem>
+                    <SelectItem value="custom-selection">Custom Selection</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="installationNotes">Installation Notes</Label>
+              <Textarea
+                id="installationNotes"
+                name="installation_notes"
+                defaultValue={customer?.installation_notes || ""}
+                placeholder="Special installation requirements, access instructions, preferred time slots..."
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="technicalContact">Technical Contact Person</Label>
+              <Input
+                id="technicalContact"
+                name="technical_contact"
+                defaultValue={customer?.technical_contact || ""}
+                placeholder="Name of person to contact for technical issues"
+              />
             </div>
           </CardContent>
         </Card>

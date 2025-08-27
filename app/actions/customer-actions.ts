@@ -92,27 +92,12 @@ export async function getCustomers() {
         c.updated_at,
         sp.name as plan,
         cs.monthly_fee,
-        cs.ip_address as ip_allocated,
-        cs.router_id as router_allocated,
         cs.status as service_status,
-        cs.next_billing_date as last_payment,
-        COALESCE(usage.data_usage, '0 GB') as data_usage,
-        COALESCE(quality.connection_quality, 95) as connection_quality
+        c.last_payment_date as last_payment,
+        c.connection_quality
       FROM customers c
       LEFT JOIN customer_services cs ON c.id = cs.customer_id AND cs.status = 'active'
       LEFT JOIN service_plans sp ON cs.service_plan_id = sp.id
-      LEFT JOIN (
-        SELECT customer_id, CONCAT(ROUND(SUM(data_used)/1024/1024/1024, 2), ' GB') as data_usage
-        FROM customer_usage 
-        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY customer_id
-      ) usage ON c.id = usage.customer_id
-      LEFT JOIN (
-        SELECT customer_id, AVG(signal_strength) as connection_quality
-        FROM network_monitoring 
-        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY customer_id
-      ) quality ON c.id = quality.customer_id
       ORDER BY c.created_at DESC
     `
 
@@ -125,10 +110,10 @@ export async function getCustomers() {
       balance: customer.balance || 0,
       payment_method: "mpesa",
       location: customer.address ? customer.address.split(",")[0] : "Unknown",
-      router_allocated: customer.router_allocated || "Not Assigned",
-      ip_allocated: customer.ip_allocated || "Not Assigned",
-      connection_quality: Math.round(customer.connection_quality) || 0,
-      data_usage: customer.data_usage || "0 GB",
+      router_allocated: "Not Assigned", // Removed non-existent router_id reference
+      ip_allocated: "Not Assigned", // Removed non-existent ip_address reference
+      connection_quality: customer.connection_quality || 95, // Use existing column from customers table
+      data_usage: "0 GB", // Default value since customer_usage table doesn't exist
       avatar: null,
       last_payment: customer.last_payment || customer.created_at,
     }))
@@ -146,31 +131,13 @@ export async function getCustomer(id: number) {
         CONCAT(c.first_name, ' ', c.last_name) as name,
         sp.name as current_plan,
         cs.monthly_fee,
-        cs.ip_address as ip_allocated,
-        cs.router_id as router_allocated,
         cs.status as service_status,
-        cs.installation_date,
-        cs.next_billing_date,
-        COALESCE(usage.data_usage, 0) as data_usage_gb,
-        COALESCE(quality.connection_quality, 95) as connection_quality,
-        staff.first_name as staff_first_name,
-        staff.last_name as staff_last_name
+        e.first_name as staff_first_name,
+        e.last_name as staff_last_name
       FROM customers c
       LEFT JOIN customer_services cs ON c.id = cs.customer_id AND cs.status = 'active'
       LEFT JOIN service_plans sp ON cs.service_plan_id = sp.id
-      LEFT JOIN staff ON c.assigned_staff_id = staff.id
-      LEFT JOIN (
-        SELECT customer_id, SUM(data_used)/1024/1024/1024 as data_usage
-        FROM customer_usage 
-        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '30 days'
-        GROUP BY customer_id
-      ) usage ON c.id = usage.customer_id
-      LEFT JOIN (
-        SELECT customer_id, AVG(signal_strength) as connection_quality
-        FROM network_monitoring 
-        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY customer_id
-      ) quality ON c.id = quality.customer_id
+      LEFT JOIN employees e ON c.assigned_staff_id = e.id
       WHERE c.id = ${id}
     `
 
@@ -181,12 +148,12 @@ export async function getCustomer(id: number) {
         monthly_fee: result[0].monthly_fee || 0,
         payment_method: "mpesa",
         location: result[0].address ? result[0].address.split(",")[0] : "Unknown",
-        router_allocated: result[0].router_allocated || "Not Assigned",
-        ip_allocated: result[0].ip_allocated || "Not Assigned",
-        connection_quality: Math.round(result[0].connection_quality) || 0,
-        data_usage: `${(result[0].data_usage_gb || 0).toFixed(2)} GB`,
+        router_allocated: "Not Assigned", // Removed non-existent router_id reference
+        ip_allocated: "Not Assigned", // Removed non-existent ip_address reference
+        connection_quality: result[0].connection_quality || 95, // Use existing column from customers table
+        data_usage: "0 GB", // Default value since customer_usage table doesn't exist
         avatar: null,
-        last_payment: result[0].next_billing_date || result[0].created_at,
+        last_payment: result[0].last_payment_date || result[0].created_at,
         assigned_staff:
           result[0].staff_first_name && result[0].staff_last_name
             ? `${result[0].staff_first_name} ${result[0].staff_last_name}`

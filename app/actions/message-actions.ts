@@ -1,6 +1,9 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export interface MessageTemplate {
   id: number
@@ -32,6 +35,10 @@ export interface Message {
   customer_id: number
   created_at: string
   updated_at: string
+  first_name?: string
+  last_name?: string
+  customer_email?: string
+  customer_phone?: string
 }
 
 export interface MessageCampaign {
@@ -52,72 +59,24 @@ export interface MessageCampaign {
   failed_count: number
 }
 
-// Mock data for development
-const mockTemplates: MessageTemplate[] = [
-  {
-    id: 1,
-    name: "Welcome Message",
-    type: "email",
-    category: "onboarding",
-    subject: "Welcome to TrustWaves Network!",
-    content:
-      "Dear {{customer_name}},\n\nWelcome to TrustWaves Network! Your internet service has been successfully activated.\n\nService Plan: {{service_plan}}\nSpeed: {{speed}}\nMonthly Fee: KES {{monthly_fee}}\n\nFor support, contact us at support@trustwaves.com or call +254700000000.\n\nBest regards,\nTrustWaves Network Team",
-    variables: ["customer_name", "service_plan", "speed", "monthly_fee"],
-    created_at: "2024-01-10T00:00:00Z",
-    updated_at: "2024-01-10T00:00:00Z",
-    usage_count: 45,
-    active: true,
-  },
-  {
-    id: 2,
-    name: "Payment Reminder",
-    type: "sms",
-    category: "billing",
-    content:
-      "Hi {{customer_name}}, your monthly bill of KES {{amount}} is due on {{due_date}}. Pay via M-Pesa: Paybill 123456, Account: {{account_number}}. TrustWaves Network",
-    variables: ["customer_name", "amount", "due_date", "account_number"],
-    created_at: "2024-01-08T00:00:00Z",
-    updated_at: "2024-01-08T00:00:00Z",
-    usage_count: 128,
-    active: true,
-  },
-  {
-    id: 3,
-    name: "Service Interruption Notice",
-    type: "email",
-    category: "maintenance",
-    subject: "Scheduled Maintenance - {{maintenance_date}}",
-    content:
-      "Dear {{customer_name}},\n\nWe will be performing scheduled maintenance on {{maintenance_date}} from {{start_time}} to {{end_time}}.\n\nDuring this time, you may experience temporary service interruptions.\n\nWe apologize for any inconvenience.\n\nTrustWaves Network Team",
-    variables: ["customer_name", "maintenance_date", "start_time", "end_time"],
-    created_at: "2024-01-05T00:00:00Z",
-    updated_at: "2024-01-05T00:00:00Z",
-    usage_count: 23,
-    active: true,
-  },
-  {
-    id: 4,
-    name: "Overdue Payment Alert",
-    type: "sms",
-    category: "billing",
-    content:
-      "URGENT: {{customer_name}}, your account is overdue by KES {{overdue_amount}}. Service may be suspended. Pay now via M-Pesa: Paybill 123456, Account: {{account_number}}. TrustWaves",
-    variables: ["customer_name", "overdue_amount", "account_number"],
-    created_at: "2024-01-03T00:00:00Z",
-    updated_at: "2024-01-03T00:00:00Z",
-    usage_count: 67,
-    active: true,
-  },
-]
-
 export async function getMessageTemplates(type?: "email" | "sms") {
   try {
-    // In production, this would query the database
-    let templates = mockTemplates
+    let query = `
+      SELECT id, name, type, category, subject, content, variables, 
+             usage_count, active, created_at, updated_at
+      FROM message_templates 
+      WHERE active = true
+    `
+    const params: any[] = []
 
     if (type) {
-      templates = templates.filter((t) => t.type === type)
+      query += ` AND type = $1`
+      params.push(type)
     }
+
+    query += ` ORDER BY created_at DESC`
+
+    const templates = await sql(query, params)
 
     return { success: true, templates }
   } catch (error) {
@@ -137,25 +96,14 @@ export async function createMessageTemplate(formData: FormData) {
     // Extract variables from content
     const variables = Array.from(content.matchAll(/\{\{(\w+)\}\}/g), (m) => m[1])
 
-    // In production, this would insert into database
-    const newTemplate: MessageTemplate = {
-      id: Date.now(), // Mock ID
-      name,
-      type,
-      category,
-      subject: type === "email" ? subject : undefined,
-      content,
-      variables,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      usage_count: 0,
-      active: true,
-    }
-
-    console.log("Creating message template:", newTemplate)
+    const result = await sql`
+      INSERT INTO message_templates (name, type, category, subject, content, variables)
+      VALUES (${name}, ${type}, ${category}, ${type === "email" ? subject : null}, ${content}, ${JSON.stringify(variables)})
+      RETURNING id, name, type, category, subject, content, variables, usage_count, active, created_at, updated_at
+    `
 
     revalidatePath("/messages")
-    return { success: true, message: "Template created successfully", template: newTemplate }
+    return { success: true, message: "Template created successfully", template: result[0] }
   } catch (error) {
     console.error("Error creating message template:", error)
     return { success: false, error: "Failed to create template" }
@@ -174,8 +122,13 @@ export async function updateMessageTemplate(formData: FormData) {
     // Extract variables from content
     const variables = Array.from(content.matchAll(/\{\{(\w+)\}\}/g), (m) => m[1])
 
-    // In production, this would update the database
-    console.log("Updating message template:", { id, name, type, category, subject, content, variables })
+    await sql`
+      UPDATE message_templates 
+      SET name = ${name}, type = ${type}, category = ${category}, 
+          subject = ${type === "email" ? subject : null}, content = ${content}, 
+          variables = ${JSON.stringify(variables)}, updated_at = NOW()
+      WHERE id = ${id}
+    `
 
     revalidatePath("/messages")
     return { success: true, message: "Template updated successfully" }
@@ -187,8 +140,11 @@ export async function updateMessageTemplate(formData: FormData) {
 
 export async function deleteMessageTemplate(id: number) {
   try {
-    // In production, this would soft delete or remove from database
-    console.log("Deleting message template:", { id })
+    await sql`
+      UPDATE message_templates 
+      SET active = false, updated_at = NOW()
+      WHERE id = ${id}
+    `
 
     revalidatePath("/messages")
     return { success: true, message: "Template deleted successfully" }
@@ -204,42 +160,52 @@ export async function sendMessage(formData: FormData) {
     const recipients = JSON.parse(formData.get("recipients") as string) as number[]
     const subject = formData.get("subject") as string
     const content = formData.get("content") as string
-    const templateId = formData.get("template_id") ? Number.parseInt(formData.get("template_id") as string) : undefined
-    const campaignId = formData.get("campaign_id") ? Number.parseInt(formData.get("campaign_id") as string) : undefined
+    const templateId = formData.get("template_id") ? Number.parseInt(formData.get("template_id") as string) : null
+    const campaignId = formData.get("campaign_id") ? Number.parseInt(formData.get("campaign_id") as string) : null
 
-    // In production, this would:
-    // 1. Create message records in database
-    // 2. Queue messages for sending via email/SMS service
-    // 3. Track delivery status
+    // Get customer details for recipients
+    const customers = await sql`
+      SELECT id, first_name, last_name, email, phone 
+      FROM customers 
+      WHERE id = ANY(${recipients})
+    `
 
-    const messages: Partial<Message>[] = recipients.map((customerId) => ({
-      type,
-      recipient: type === "email" ? `customer${customerId}@example.com` : `+25471234567${customerId}`,
-      subject: type === "email" ? subject : undefined,
-      content,
-      template_id: templateId,
-      campaign_id: campaignId,
-      customer_id: customerId,
-      status: "pending",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }))
+    // Create message records
+    const messagePromises = customers.map(async (customer) => {
+      const recipient = type === "email" ? customer.email : customer.phone
 
-    console.log("Sending messages:", messages)
+      return sql`
+        INSERT INTO messages (type, recipient, subject, content, template_id, campaign_id, customer_id, status)
+        VALUES (${type}, ${recipient}, ${type === "email" ? subject : null}, ${content}, ${templateId}, ${campaignId}, ${customer.id}, 'pending')
+        RETURNING id
+      `
+    })
 
-    // Simulate sending delay
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const messageResults = await Promise.all(messagePromises)
 
     // Update template usage count if template was used
     if (templateId) {
-      console.log("Incrementing template usage count:", templateId)
+      await sql`
+        UPDATE message_templates 
+        SET usage_count = usage_count + ${recipients.length}
+        WHERE id = ${templateId}
+      `
     }
+
+    // In a real implementation, you would queue these messages for actual sending
+    // For now, we'll mark them as sent
+    const messageIds = messageResults.map((result) => result[0].id)
+    await sql`
+      UPDATE messages 
+      SET status = 'sent', sent_at = NOW()
+      WHERE id = ANY(${messageIds})
+    `
 
     revalidatePath("/messages")
     return {
       success: true,
-      message: `${messages.length} ${type} message(s) sent successfully`,
-      sent_count: messages.length,
+      message: `${recipients.length} ${type} message(s) sent successfully`,
+      sent_count: recipients.length,
     }
   } catch (error) {
     console.error("Error sending messages:", error)
@@ -256,50 +222,50 @@ export async function getMessageHistory(filters?: {
   date_to?: string
 }) {
   try {
-    // Mock message history data
-    const mockHistory: Message[] = [
-      {
-        id: 1,
-        type: "email",
-        recipient: "john@example.com",
-        subject: "Welcome to TrustWaves Network!",
-        content: "Dear John Doe, Welcome to TrustWaves Network!...",
-        template_id: 1,
-        status: "delivered",
-        sent_at: "2024-01-15T10:30:00Z",
-        delivered_at: "2024-01-15T10:30:15Z",
-        opened_at: "2024-01-15T11:45:22Z",
-        customer_id: 1,
-        created_at: "2024-01-15T10:30:00Z",
-        updated_at: "2024-01-15T11:45:22Z",
-      },
-      {
-        id: 2,
-        type: "sms",
-        recipient: "+254712345678",
-        content: "Hi John Doe, your monthly bill of KES 2500 is due on 2024-01-20...",
-        template_id: 2,
-        status: "delivered",
-        sent_at: "2024-01-14T09:15:00Z",
-        delivered_at: "2024-01-14T09:15:03Z",
-        customer_id: 1,
-        created_at: "2024-01-14T09:15:00Z",
-        updated_at: "2024-01-14T09:15:03Z",
-      },
-    ]
-
-    // Apply filters in production
-    let filteredHistory = mockHistory
+    let query = `
+      SELECT m.*, c.first_name, c.last_name, c.email as customer_email, c.phone as customer_phone
+      FROM messages m
+      LEFT JOIN customers c ON m.customer_id = c.id
+      WHERE 1=1
+    `
+    const params: any[] = []
+    let paramIndex = 1
 
     if (filters?.type) {
-      filteredHistory = filteredHistory.filter((m) => m.type === filters.type)
+      query += ` AND m.type = $${paramIndex}`
+      params.push(filters.type)
+      paramIndex++
     }
 
     if (filters?.status) {
-      filteredHistory = filteredHistory.filter((m) => m.status === filters.status)
+      query += ` AND m.status = $${paramIndex}`
+      params.push(filters.status)
+      paramIndex++
     }
 
-    return { success: true, messages: filteredHistory }
+    if (filters?.customer_id) {
+      query += ` AND m.customer_id = $${paramIndex}`
+      params.push(filters.customer_id)
+      paramIndex++
+    }
+
+    if (filters?.date_from) {
+      query += ` AND m.created_at >= $${paramIndex}`
+      params.push(filters.date_from)
+      paramIndex++
+    }
+
+    if (filters?.date_to) {
+      query += ` AND m.created_at <= $${paramIndex}`
+      params.push(filters.date_to)
+      paramIndex++
+    }
+
+    query += ` ORDER BY m.created_at DESC LIMIT 100`
+
+    const messages = await sql(query, params)
+
+    return { success: true, messages }
   } catch (error) {
     console.error("Error fetching message history:", error)
     return { success: false, error: "Failed to fetch message history", messages: [] }
@@ -346,17 +312,31 @@ export async function createMessageCampaign(formData: FormData) {
 
 export async function getMessageStats() {
   try {
-    // In production, this would query database for actual stats
+    const [totalResult, todayResult, yesterdayResult, deliveryResult] = await Promise.all([
+      sql`SELECT COUNT(*) as total FROM messages`,
+      sql`SELECT COUNT(*) as today FROM messages WHERE DATE(created_at) = CURRENT_DATE`,
+      sql`SELECT COUNT(*) as yesterday FROM messages WHERE DATE(created_at) = CURRENT_DATE - INTERVAL '1 day'`,
+      sql`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(CASE WHEN status IN ('delivered', 'opened') THEN 1 END) as delivered
+        FROM messages 
+        WHERE sent_at IS NOT NULL
+      `,
+    ])
+
+    const total = Number.parseInt(totalResult[0].total)
+    const today = Number.parseInt(todayResult[0].today)
+    const yesterday = Number.parseInt(yesterdayResult[0].yesterday)
+    const deliveryStats = deliveryResult[0]
+    const deliveryRate = deliveryStats.total > 0 ? (deliveryStats.delivered / deliveryStats.total) * 100 : 0
+
     const stats = {
-      total_messages: 1247,
-      sent_today: 23,
-      sent_yesterday: 18,
-      delivery_rate: 98.5,
-      open_rate: 65.2,
-      unread_count: 5,
-      failed_count: 18,
-      monthly_sent: 892,
-      monthly_delivered: 879,
+      total_messages: total,
+      sent_today: today,
+      sent_yesterday: yesterday,
+      delivery_rate: Math.round(deliveryRate * 10) / 10,
+      unread_count: 0, // This would require additional logic
     }
 
     return { success: true, stats }

@@ -99,7 +99,7 @@ export default function ServerConfigurationPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="radius-host">RADIUS Server Host *</Label>
-                  <Input id="radius-host" placeholder="192.168.1.100" defaultValue="192.168.1.100" />
+                  <Input id="radius-host" placeholder="Enter RADIUS server IP" defaultValue="" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="auth-port">Authentication Port</Label>
@@ -177,7 +177,7 @@ export default function ServerConfigurationPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="vpn-server-ip">Server IP Address</Label>
-                  <Input id="vpn-server-ip" placeholder="192.168.1.1" defaultValue="192.168.1.1" />
+                  <Input id="vpn-server-ip" placeholder="Enter VPN server IP" defaultValue="" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="vpn-port">Port</Label>
@@ -286,7 +286,7 @@ export default function ServerConfigurationPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="gateway">Default Gateway</Label>
-                      <Input id="gateway" placeholder="192.168.1.1" defaultValue="192.168.1.1" />
+                      <Input id="gateway" placeholder="Enter gateway IP" defaultValue="" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="subnet-mask">Subnet Mask</Label>
@@ -294,11 +294,11 @@ export default function ServerConfigurationPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="management-vlan">Management VLAN</Label>
-                      <Input id="management-vlan" placeholder="100" defaultValue="100" />
+                      <Input id="management-vlan" placeholder="Enter VLAN ID" defaultValue="" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="customer-vlan">Customer VLAN Range</Label>
-                      <Input id="customer-vlan" placeholder="200-299" defaultValue="200-299" />
+                      <Input id="customer-vlan" placeholder="200-299" defaultValue="" />
                     </div>
                   </div>
 

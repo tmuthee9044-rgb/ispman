@@ -124,19 +124,15 @@ export default function PaymentSettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mpesa-shortcode">Business Short Code *</Label>
-                  <Input id="mpesa-shortcode" placeholder="174379" defaultValue="174379" />
+                  <Input id="mpesa-shortcode" placeholder="Enter your business short code" defaultValue="" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mpesa-consumer-key">Consumer Key *</Label>
-                  <Input
-                    id="mpesa-consumer-key"
-                    placeholder="Enter consumer key"
-                    defaultValue="9v38Dtu5u2BpsITPmLcXNWGMsjZRWSTG"
-                  />
+                  <Input id="mpesa-consumer-key" placeholder="Enter consumer key from Daraja" defaultValue="" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="mpesa-consumer-secret">Consumer Secret *</Label>
-                  <Input id="mpesa-consumer-secret" type="password" placeholder="Enter consumer secret" />
+                  <Input id="mpesa-consumer-secret" type="password" placeholder="Enter consumer secret from Daraja" />
                 </div>
               </div>
 
@@ -145,27 +141,19 @@ export default function PaymentSettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="stk-shortcode">STK Push Short Code</Label>
-                    <Input id="stk-shortcode" placeholder="174379" defaultValue="174379" />
+                    <Input id="stk-shortcode" placeholder="Enter STK push short code" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stk-passkey">Passkey *</Label>
-                    <Input id="stk-passkey" type="password" placeholder="Enter STK push passkey" />
+                    <Input id="stk-passkey" type="password" placeholder="Enter STK push passkey from Daraja" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stk-callback">Callback URL</Label>
-                    <Input
-                      id="stk-callback"
-                      placeholder="https://yourdomain.com/api/mpesa/callback"
-                      defaultValue="https://techconnect.co.ke/api/mpesa/callback"
-                    />
+                    <Input id="stk-callback" placeholder="https://yourdomain.com/api/mpesa/callback" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="stk-timeout">Timeout URL</Label>
-                    <Input
-                      id="stk-timeout"
-                      placeholder="https://yourdomain.com/api/mpesa/timeout"
-                      defaultValue="https://techconnect.co.ke/api/mpesa/timeout"
-                    />
+                    <Input id="stk-timeout" placeholder="https://yourdomain.com/api/mpesa/timeout" defaultValue="" />
                   </div>
                 </div>
               </div>
@@ -175,14 +163,14 @@ export default function PaymentSettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="c2b-shortcode">C2B Short Code</Label>
-                    <Input id="c2b-shortcode" placeholder="600000" defaultValue="600000" />
+                    <Input id="c2b-shortcode" placeholder="Enter C2B short code" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="c2b-validation">Validation URL</Label>
                     <Input
                       id="c2b-validation"
                       placeholder="https://yourdomain.com/api/mpesa/validation"
-                      defaultValue="https://techconnect.co.ke/api/mpesa/validation"
+                      defaultValue=""
                     />
                   </div>
                   <div className="space-y-2">
@@ -190,7 +178,7 @@ export default function PaymentSettingsPage() {
                     <Input
                       id="c2b-confirmation"
                       placeholder="https://yourdomain.com/api/mpesa/confirmation"
-                      defaultValue="https://techconnect.co.ke/api/mpesa/confirmation"
+                      defaultValue=""
                     />
                   </div>
                   <div className="space-y-2">
@@ -264,23 +252,23 @@ export default function PaymentSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="account-number">Account Number *</Label>
-                    <Input id="account-number" placeholder="1234567890" defaultValue="1234567890" />
+                    <Input id="account-number" placeholder="Enter bank account number" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="account-name">Account Name *</Label>
-                    <Input id="account-name" placeholder="TechConnect ISP Ltd" defaultValue="TechConnect ISP Ltd" />
+                    <Input id="account-name" placeholder="Enter account holder name" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="branch-code">Branch Code</Label>
-                    <Input id="branch-code" placeholder="001" defaultValue="001" />
+                    <Input id="branch-code" placeholder="Enter branch code" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="swift-code">SWIFT Code</Label>
-                    <Input id="swift-code" placeholder="EQBLKENA" defaultValue="EQBLKENA" />
+                    <Input id="swift-code" placeholder="Enter SWIFT code" defaultValue="" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="iban">IBAN (if applicable)</Label>
-                    <Input id="iban" placeholder="KE12EQBL12345678901234" />
+                    <Input id="iban" placeholder="Enter IBAN" />
                   </div>
                 </div>
               </div>
@@ -298,11 +286,25 @@ export default function PaymentSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="transfer-fee">Transfer Fee (KES)</Label>
-                    <Input id="transfer-fee" type="number" placeholder="0" defaultValue="0" min="0" step="0.01" />
+                    <Input
+                      id="transfer-fee"
+                      type="number"
+                      placeholder="Enter transfer fee"
+                      defaultValue=""
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="min-transfer">Minimum Transfer Amount</Label>
-                    <Input id="min-transfer" type="number" placeholder="100" defaultValue="100" min="0" step="0.01" />
+                    <Input
+                      id="min-transfer"
+                      type="number"
+                      placeholder="Enter minimum transfer amount"
+                      defaultValue=""
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
                 </div>
               </div>
@@ -387,8 +389,8 @@ export default function PaymentSettingsPage() {
                     <Input
                       id="processing-fee"
                       type="number"
-                      placeholder="2.5"
-                      defaultValue="2.5"
+                      placeholder="Enter processing fee"
+                      defaultValue=""
                       min="0"
                       max="10"
                       step="0.1"
@@ -396,15 +398,22 @@ export default function PaymentSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="min-payment">Minimum Payment (KES)</Label>
-                    <Input id="min-payment" type="number" placeholder="50" defaultValue="50" min="0" step="0.01" />
+                    <Input
+                      id="min-payment"
+                      type="number"
+                      placeholder="Enter minimum payment"
+                      defaultValue=""
+                      min="0"
+                      step="0.01"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="max-payment">Maximum Payment (KES)</Label>
                     <Input
                       id="max-payment"
                       type="number"
-                      placeholder="100000"
-                      defaultValue="100000"
+                      placeholder="Enter maximum payment"
+                      defaultValue=""
                       min="0"
                       step="0.01"
                     />
@@ -480,7 +489,7 @@ export default function PaymentSettingsPage() {
                       <Input
                         id="payment-success-webhook"
                         placeholder="https://yourdomain.com/webhooks/payment-success"
-                        defaultValue="https://techconnect.co.ke/webhooks/payment-success"
+                        defaultValue=""
                       />
                     </div>
                     <div className="space-y-2">
@@ -488,7 +497,7 @@ export default function PaymentSettingsPage() {
                       <Input
                         id="payment-failed-webhook"
                         placeholder="https://yourdomain.com/webhooks/payment-failed"
-                        defaultValue="https://techconnect.co.ke/webhooks/payment-failed"
+                        defaultValue=""
                       />
                     </div>
                     <div className="space-y-2">
@@ -496,16 +505,12 @@ export default function PaymentSettingsPage() {
                       <Input
                         id="payment-pending-webhook"
                         placeholder="https://yourdomain.com/webhooks/payment-pending"
-                        defaultValue="https://techconnect.co.ke/webhooks/payment-pending"
+                        defaultValue=""
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="refund-webhook">Refund URL</Label>
-                      <Input
-                        id="refund-webhook"
-                        placeholder="https://yourdomain.com/webhooks/refund"
-                        defaultValue="https://techconnect.co.ke/webhooks/refund"
-                      />
+                      <Input id="refund-webhook" placeholder="https://yourdomain.com/webhooks/refund" defaultValue="" />
                     </div>
                   </div>
                 </div>
@@ -539,15 +544,22 @@ export default function PaymentSettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="max-retries">Max Retries</Label>
-                    <Input id="max-retries" type="number" placeholder="3" defaultValue="3" min="0" max="10" />
+                    <Input
+                      id="max-retries"
+                      type="number"
+                      placeholder="Enter max retries"
+                      defaultValue=""
+                      min="0"
+                      max="10"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="retry-delay">Retry Delay (seconds)</Label>
-                    <Input id="retry-delay" type="number" placeholder="60" defaultValue="60" min="1" />
+                    <Input id="retry-delay" type="number" placeholder="Enter retry delay" defaultValue="" min="1" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="timeout">Timeout (seconds)</Label>
-                    <Input id="timeout" type="number" placeholder="30" defaultValue="30" min="1" max="300" />
+                    <Input id="timeout" type="number" placeholder="Enter timeout" defaultValue="" min="1" max="300" />
                   </div>
                 </div>
               </div>

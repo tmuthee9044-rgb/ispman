@@ -103,6 +103,7 @@ interface Customer {
 
 interface CustomerDetailsClientProps {
   customer: Customer
+  customerServices?: any[] // Add customerServices as optional prop
 }
 
 function UsageChart({ customerId }: { customerId: number }) {
@@ -584,13 +585,22 @@ function TroubleshootModal({ open, onOpenChange, customer, handleTroubleshoot, i
   )
 }
 
-export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) {
+export function CustomerDetailsClient({
+  customer,
+  customerServices = [], // Default to empty array if not provided
+}: CustomerDetailsClientProps) {
   const [activeTab, setActiveTab] = useState("services")
   const [editingInfo, setEditingInfo] = useState(false)
   const [editedCustomer, setEditedCustomer] = useState(customer)
+  const [isLoading, setIsLoading] = useState(false)
+  const [availableServicePlans, setAvailableServicePlans] = useState([])
+  const [selectedServicePlan, setSelectedServicePlan] = useState("")
+  const [customerServicesData, setCustomerServices] = useState<any[]>(customerServices)
 
   useEffect(() => {
-    setEditedCustomer(customer)
+    if (customer) {
+      setEditedCustomer(customer)
+    }
   }, [customer])
 
   const [selectedServiceForSuspension, setSelectedServiceForSuspension] = useState<string>("")
@@ -625,11 +635,7 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
   const [showTroubleshootModal, setShowTroubleshootModal] = useState(false)
   const [newMessage, setNewMessage] = useState("")
   const [messageType, setMessageType] = useState("email")
-  const [isLoading, setIsLoading] = useState(false)
   const [suspensionNotes, setSuspensionNotes] = useState("")
-  const [customerServices, setCustomerServices] = useState([])
-  const [availableServicePlans, setAvailableServicePlans] = useState([])
-  const [selectedServicePlan, setSelectedServicePlan] = useState("")
   const [selectedServiceForEdit, setSelectedServiceForEdit] = useState<any>(null)
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
 
@@ -757,13 +763,35 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
 
   const loadCustomerServicesData = async () => {
     try {
-      const response = await fetch(`/api/customers/${customer?.id}/services`)
+      if (!customer?.id) {
+        console.error("[v0] Customer ID is missing")
+        return
+      }
+
+      const response = await fetch(`/api/customers/${customer.id}/services`)
       if (response.ok) {
         const services = await response.json()
         setCustomerServices(services || [])
+      } else {
+        console.error("[v0] Failed to load customer services:", response.statusText)
       }
     } catch (error) {
-      console.error("Failed to load customer services:", error)
+      console.error("[v0] Failed to load customer services:", error)
+      setCustomerServices([])
+    }
+  }
+
+  const loadAvailableServicePlans = async () => {
+    try {
+      const response = await fetch("/api/service-plans")
+      if (response.ok) {
+        const plans = await response.json()
+        setAvailableServicePlans(plans || [])
+      } else {
+        console.error("Failed to load available service plans:", response.statusText)
+      }
+    } catch (error) {
+      console.error("Failed to load available service plans:", error)
     }
   }
 
@@ -773,78 +801,87 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
       return
     }
 
+    if (!customer?.id) {
+      toast.error("Customer ID is missing")
+      return
+    }
+
     try {
       setIsLoading(true)
       const selectedPlan = availableServicePlans.find((plan) => plan.id === selectedServicePlan)
 
+      if (!selectedPlan) {
+        toast.error("Selected service plan not found")
+        return
+      }
+
+      // Calculate next billing date (30 days from now)
+      const installationDate = new Date()
+      const nextBillingDate = new Date(installationDate)
+      nextBillingDate.setDate(nextBillingDate.getDate() + 30)
+
+      const requestData = {
+        service_plan_id: Number.parseInt(selectedServicePlan),
+        status: "active",
+        monthly_fee: Number.parseFloat(selectedPlan.price || selectedPlan.monthly_fee || 0),
+        installation_date: installationDate.toISOString().split("T")[0],
+        next_billing_date: nextBillingDate.toISOString().split("T")[0],
+        auto_renewal: true,
+        ip_address: null,
+        router_id: null,
+        notes: `Service added for ${customer?.first_name || "Customer"} ${customer?.last_name || ""}`,
+      }
+
+      console.log("[v0] Sending add service request:", requestData)
+
       const response = await fetch(`/api/customers/${customer.id}/services`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service_plan_id: selectedServicePlan,
-          monthly_fee: selectedPlan?.price || 0,
-          status: "active",
-          start_date: new Date().toISOString(),
-        }),
+        body: JSON.stringify(requestData),
       })
 
       if (response.ok) {
+        const result = await response.json()
+        console.log("[v0] Service added successfully:", result)
         toast.success("Service added successfully")
-        loadCustomerServicesData()
+        await loadCustomerServicesData()
         setShowAddServiceModal(false)
         setSelectedServicePlan("")
       } else {
-        const error = await response.json()
-        toast.error(error.message || "Failed to add service")
+        const errorText = await response.text()
+        console.error("[v0] API Error:", errorText)
+        toast.error(`Failed to add service: ${response.status} ${response.statusText}`)
       }
     } catch (error) {
-      toast.error("Error adding service")
+      console.error("[v0] Error adding service:", error)
+      toast.error("Error adding service. Please check your connection and try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const loadAvailableServicePlans = async () => {
-    try {
-      const response = await fetch("/api/service-plans")
-      if (response.ok) {
-        const plans = await response.json()
-        setAvailableServicePlans(plans)
-      } else {
-        const fallbackPlans = [
-          { id: 1, name: "Basic Home", price: 2999, speed: "10/5 Mbps" },
-          { id: 2, name: "Standard Home", price: 4999, speed: "25/10 Mbps" },
-          { id: 3, name: "Premium Home", price: 7999, speed: "50/25 Mbps" },
-          { id: 4, name: "Business Starter", price: 14999, speed: "100/50 Mbps" },
-        ]
-        setAvailableServicePlans(fallbackPlans)
-      }
-    } catch (error) {
-      const fallbackPlans = [
-        { id: 1, name: "Basic Home", price: 2999, speed: "10/5 Mbps" },
-        { id: 2, name: "Standard Home", price: 4999, speed: "25/10 Mbps" },
-        { id: 3, name: "Premium Home", price: 7999, speed: "50/25 Mbps" },
-        { id: 4, name: "Business Starter", price: 14999, speed: "100/50 Mbps" },
-      ]
-      setAvailableServicePlans(fallbackPlans)
-    }
-  }
-
   React.useEffect(() => {
-    loadCustomerServicesData()
-    loadAvailableServicePlans()
-  }, [customer.id])
+    if (customer?.id) {
+      loadCustomerServicesData()
+      loadAvailableServicePlans()
+    }
+  }, [customer?.id])
 
   const handleEditService = async (serviceId: string) => {
-    const service = customerServices.find((s) => s.id === serviceId)
-    if (!service) {
-      toast.error("Service not found")
-      return
-    }
+    try {
+      const service = customerServices.find((s) => s.id === serviceId)
+      if (!service) {
+        toast.error("Service not found")
+        return
+      }
 
-    // Set up edit service modal state
-    setSelectedServiceForEdit(service)
-    setShowEditServiceModal(true)
+      // Set up edit service modal state
+      setSelectedServiceForEdit(service)
+      setShowEditServiceModal(true)
+    } catch (error) {
+      console.error("[v0] Error in handleEditService:", error)
+      toast.error("Error loading service details")
+    }
   }
 
   const handleSuspendService = async (serviceId: string) => {
@@ -1107,6 +1144,15 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
     setIsLoading(false)
   }
 
+  if (!customer) {
+    console.error("[v0] Customer data is null or undefined")
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="text-center text-red-500">Error: Customer data not found. Please try refreshing the page.</div>
+      </div>
+    )
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -1257,7 +1303,9 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     <CardTitle>Customer Services</CardTitle>
                     <CardDescription>
                       Manage services for this customer. Total monthly cost:
-                      {formatCurrency(customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0))}
+                      {formatCurrency(
+                        (customerServices || []).reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
+                      )}
                     </CardDescription>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1889,7 +1937,9 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                   <div>
                     <p className="text-sm text-muted-foreground">Monthly Fee</p>
                     <p className="font-bold text-lg">
-                      {formatCurrency(customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0))}
+                      {formatCurrency(
+                        (customerServices || []).reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
+                      )}
                     </p>
                   </div>
                 </CardContent>
@@ -2153,7 +2203,8 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     <Input
                       type="number"
                       value={
-                        monthlyFee || customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0)
+                        monthlyFee ||
+                        (customerServices || []).reduce((sum, service) => sum + (service.monthly_fee || 0), 0)
                       }
                       onChange={(e) => setMonthlyFee(Number(e.target.value))}
                       placeholder="Monthly service fee"
@@ -2165,7 +2216,8 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                       <span className="font-medium">
                         {calculateActivationDays(
                           paymentAmount,
-                          monthlyFee || customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
+                          monthlyFee ||
+                            (customerServices || []).reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
                         )}{" "}
                         days
                       </span>
@@ -2177,7 +2229,8 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                     <strong>Service expires on:</strong>{" "}
                     {calculateExpiryDate(
                       paymentAmount,
-                      monthlyFee || customerServices.reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
+                      monthlyFee ||
+                        (customerServices || []).reduce((sum, service) => sum + (service.monthly_fee || 0), 0),
                     )}
                   </p>
                 </div>
@@ -2864,7 +2917,7 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-3 p-3 border rounded-lg">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                     <div className="flex-1">
                       <p className="font-medium text-sm">Payment Reminder</p>
                       <p className="text-xs text-muted-foreground">Tomorrow at 10:00 AM</p>
@@ -3340,3 +3393,5 @@ export function CustomerDetailsClient({ customer }: CustomerDetailsClientProps) 
     </>
   )
 }
+
+export default CustomerDetailsClient

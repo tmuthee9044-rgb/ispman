@@ -19,93 +19,120 @@ import {
   XCircle,
 } from "lucide-react"
 
-const metrics = [
-  {
-    title: "Users",
-    value: "10,000",
-    percentage: 5,
-    trend: "up",
-    icon: Users,
-    color: "from-green-500 to-green-400",
-    bgColor: "bg-green-500",
-    iconColor: "text-white",
-  },
-  {
-    title: "Revenue",
-    value: "KSh 5,000,000",
-    percentage: 10,
-    trend: "up",
-    icon: DollarSign,
-    color: "from-blue-500 to-blue-400",
-    bgColor: "bg-blue-500",
-    iconColor: "text-white",
-  },
-  {
-    title: "Bandwidth",
-    value: "80%",
-    percentage: 20,
-    trend: "down",
-    icon: Wifi,
-    color: "from-red-500 to-red-400",
-    bgColor: "bg-red-500",
-    iconColor: "text-white",
-  },
-  {
-    title: "Alerts",
-    value: "5",
-    percentage: 0,
-    trend: "none",
-    icon: AlertTriangle,
-    color: "from-yellow-500 to-yellow-400",
-    bgColor: "bg-yellow-500",
-    iconColor: "text-white",
-  },
-]
+interface DashboardData {
+  metrics: {
+    users: { value: number; change: string; trend: string }
+    revenue: { value: number; change: string; trend: string }
+    bandwidth: { value: number; change: string; trend: string }
+    alerts: { value: number; change: string; trend: string }
+  }
+  networkStatus: { online: number; offline: number; total: number }
+  invoiceStats: { count: number; amount: number }
+  recentActivity: Array<{
+    id: number
+    status: string
+    message: string
+    details: string
+    time: string
+    category: string
+  }>
+}
 
-const recentActivity = [
-  {
-    id: 1,
-    status: "success",
-    message: "System update completed",
-    details: "Updated to version 2.3.1",
-    time: "10:00 AM",
-    category: "Maintenance",
-  },
-  {
-    id: 2,
-    status: "warning",
-    message: "High bandwidth usage detected",
-    details: "Usage exceeded 80% threshold",
-    time: "11:30 AM",
-    category: "Alerts",
-  },
-  {
-    id: 3,
-    status: "error",
-    message: "Server downtime",
-    details: "Server 12 is offline",
-    time: "1:00 PM",
-    category: "Downtime",
-  },
-  {
-    id: 4,
-    status: "info",
-    message: "New customer signup",
-    details: "Customer John Doe signed up",
-    time: "2:45 PM",
-    category: "Signups",
-  },
-]
+interface RevenueData {
+  month: string
+  value: number
+  height: string
+  growth: string
+}
 
 export default function Dashboard() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isCheckingHealth, setIsCheckingHealth] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [revenueData, setRevenueData] = useState<RevenueData[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [metricsResponse, revenueResponse] = await Promise.all([
+          fetch("/api/dashboard/metrics"),
+          fetch("/api/dashboard/revenue"),
+        ])
+
+        if (metricsResponse.ok) {
+          const metricsData = await metricsResponse.json()
+          setDashboardData(metricsData.data)
+        }
+
+        if (revenueResponse.ok) {
+          const revenueData = await revenueResponse.json()
+          setRevenueData(revenueData.data)
+        }
+      } catch (error) {
+        console.error("[v0] Failed to fetch dashboard data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+
+  const metrics = dashboardData
+    ? [
+        {
+          title: "Users",
+          value: dashboardData.metrics.users.value.toLocaleString(),
+          percentage: Number.parseInt(dashboardData.metrics.users.change.replace(/[+%]/g, "")),
+          trend: dashboardData.metrics.users.trend,
+          change: dashboardData.metrics.users.change,
+          icon: Users,
+          color: "from-green-500 to-green-400",
+          bgColor: "bg-green-500",
+          iconColor: "text-white",
+        },
+        {
+          title: "Revenue",
+          value: `KSh ${dashboardData.metrics.revenue.value.toLocaleString()}`,
+          percentage: Number.parseInt(dashboardData.metrics.revenue.change.replace(/[+%]/g, "")),
+          trend: dashboardData.metrics.revenue.trend,
+          change: dashboardData.metrics.revenue.change,
+          icon: DollarSign,
+          color: "from-blue-500 to-blue-400",
+          bgColor: "bg-blue-500",
+          iconColor: "text-white",
+        },
+        {
+          title: "Bandwidth",
+          value: `${dashboardData.metrics.bandwidth.value}%`,
+          percentage: Number.parseInt(dashboardData.metrics.bandwidth.change.replace(/[+%-]/g, "")),
+          trend: dashboardData.metrics.bandwidth.trend,
+          change: dashboardData.metrics.bandwidth.change,
+          icon: Wifi,
+          color: "from-red-500 to-red-400",
+          bgColor: "bg-red-500",
+          iconColor: "text-white",
+        },
+        {
+          title: "Alerts",
+          value: dashboardData.metrics.alerts.value.toString(),
+          percentage: Number.parseInt(dashboardData.metrics.alerts.change.replace(/[+%]/g, "")),
+          trend: dashboardData.metrics.alerts.trend,
+          change: dashboardData.metrics.alerts.change,
+          icon: AlertTriangle,
+          color: "from-yellow-500 to-yellow-400",
+          bgColor: "bg-yellow-500",
+          iconColor: "text-white",
+        },
+      ]
+    : []
 
   const handleSystemHealth = async () => {
     setIsCheckingHealth(true)
@@ -166,6 +193,19 @@ export default function Dashboard() {
       default:
         return <Activity className="h-4 w-4 text-blue-500" />
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <Activity className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading dashboard data...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -266,14 +306,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="pl-2">
             <div className="h-[200px] sm:h-[300px] flex items-end justify-between gap-1 sm:gap-2 px-2 sm:px-4">
-              {[
-                { month: "Aug", value: 3200000, height: "45%", growth: "+5%" },
-                { month: "Sep", value: 3800000, height: "60%", growth: "+18%" },
-                { month: "Oct", value: 3500000, height: "50%", growth: "-8%" },
-                { month: "Nov", value: 4100000, height: "68%", growth: "+17%" },
-                { month: "Dec", value: 4500000, height: "80%", growth: "+10%" },
-                { month: "Jan", value: 4200000, height: "75%", growth: "-7%" },
-              ].map((data, index) => (
+              {revenueData.map((data, index) => (
                 <div key={index} className="flex flex-col items-center flex-1">
                   <div
                     className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-md hover:from-blue-600 hover:to-blue-500 transition-all duration-300 cursor-pointer relative group"
@@ -302,7 +335,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2 sm:space-y-3 max-h-[300px] overflow-y-auto">
-              {recentActivity.map((activity) => (
+              {dashboardData?.recentActivity.map((activity) => (
                 <div
                   key={activity.id}
                   className="flex items-start space-x-2 sm:space-x-3 p-2 sm:p-3 rounded-lg hover:bg-muted/50 transition-colors border border-transparent hover:border-muted"
@@ -311,23 +344,13 @@ export default function Dashboard() {
                   <div className="flex-1 space-y-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-xs sm:text-sm font-medium leading-none truncate">{activity.message}</p>
-                      <Badge
-                        variant={
-                          activity.priority === "urgent"
-                            ? "destructive"
-                            : activity.priority === "high"
-                              ? "secondary"
-                              : "outline"
-                        }
-                        className="text-xs flex-shrink-0"
-                      >
-                        {activity.priority}
+                      <Badge variant="outline" className="text-xs flex-shrink-0">
+                        {activity.category}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-2">{activity.details}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">{activity.time}</span>
-                      <span className="text-xs text-muted-foreground hidden sm:inline">{activity.category}</span>
                     </div>
                   </div>
                 </div>
@@ -344,19 +367,33 @@ export default function Dashboard() {
             <Server className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">24 / 25</div>
+            <div className="text-lg sm:text-2xl font-bold">
+              {dashboardData?.networkStatus.online || 0} / {dashboardData?.networkStatus.total || 0}
+            </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-2 space-y-1 sm:space-y-0">
               <div className="flex items-center space-x-1 sm:space-x-2">
                 <Badge variant="default" className="text-xs bg-green-100 text-green-800">
-                  Online: 24
+                  Online: {dashboardData?.networkStatus.online || 0}
                 </Badge>
                 <Badge variant="destructive" className="text-xs">
-                  Offline: 1
+                  Offline: {dashboardData?.networkStatus.offline || 0}
                 </Badge>
               </div>
             </div>
-            <Progress value={96} className="mt-2 h-2" />
-            <p className="text-xs text-muted-foreground mt-1">96% operational</p>
+            <Progress
+              value={
+                dashboardData?.networkStatus.total
+                  ? (dashboardData.networkStatus.online / dashboardData.networkStatus.total) * 100
+                  : 0
+              }
+              className="mt-2 h-2"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              {dashboardData?.networkStatus.total
+                ? Math.round((dashboardData.networkStatus.online / dashboardData.networkStatus.total) * 100)
+                : 0}
+              % operational
+            </p>
           </CardContent>
         </Card>
 
@@ -366,11 +403,12 @@ export default function Dashboard() {
             <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-lg sm:text-2xl font-bold">127</div>
-            <div className="text-xs sm:text-sm text-muted-foreground">Total: KSh 847,500</div>
+            <div className="text-lg sm:text-2xl font-bold">{dashboardData?.invoiceStats.count || 0}</div>
+            <div className="text-xs sm:text-sm text-muted-foreground">
+              Total: KSh {dashboardData?.invoiceStats.amount.toLocaleString() || 0}
+            </div>
             <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-red-600">Overdue: 23</span>
-              <span className="text-xs text-yellow-600">Due Soon: 45</span>
+              <span className="text-xs text-red-600">Overdue: {dashboardData?.invoiceStats.count || 0}</span>
             </div>
           </CardContent>
         </Card>

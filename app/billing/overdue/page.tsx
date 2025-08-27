@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ArrowLeft, Phone, Mail, MessageSquare, Download, Search, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,62 +11,55 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 
-// Sample overdue invoices data
-const overdueInvoices = [
-  {
-    id: "INV-001",
-    customer: "John Doe",
-    email: "john@example.com",
-    phone: "+254712345678",
-    amount: 2500,
-    daysOverdue: 15,
-    invoiceDate: "2024-01-15",
-    dueDate: "2024-01-30",
-    status: "overdue",
-    plan: "Premium 50Mbps",
-  },
-  {
-    id: "INV-002",
-    customer: "Jane Smith",
-    email: "jane@example.com",
-    phone: "+254723456789",
-    amount: 1800,
-    daysOverdue: 7,
-    invoiceDate: "2024-01-20",
-    dueDate: "2024-02-05",
-    status: "overdue",
-    plan: "Standard 25Mbps",
-  },
-  {
-    id: "INV-003",
-    customer: "Tech Solutions Ltd",
-    email: "billing@techsolutions.com",
-    phone: "+254734567890",
-    amount: 5000,
-    daysOverdue: 30,
-    invoiceDate: "2024-01-10",
-    dueDate: "2024-01-25",
-    status: "overdue",
-    plan: "Business 100Mbps",
-  },
-  {
-    id: "INV-004",
-    customer: "Mary Johnson",
-    email: "mary@example.com",
-    phone: "+254745678901",
-    amount: 1200,
-    daysOverdue: 3,
-    invoiceDate: "2024-02-01",
-    dueDate: "2024-02-10",
-    status: "overdue",
-    plan: "Basic 10Mbps",
-  },
-]
+interface OverdueInvoice {
+  id: string
+  customer: string
+  email: string
+  phone: string
+  amount: number
+  daysOverdue: number
+  invoiceDate: string
+  dueDate: string
+  status: string
+  plan: string
+}
 
 export default function OverduePage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterDays, setFilterDays] = useState("all")
+  const [overdueInvoices, setOverdueInvoices] = useState<OverdueInvoice[]>([])
+  const [loading, setLoading] = useState(true)
   const { toast } = useToast()
+
+  useEffect(() => {
+    const fetchOverdueInvoices = async () => {
+      try {
+        const response = await fetch("/api/billing/overdue")
+        if (response.ok) {
+          const data = await response.json()
+          setOverdueInvoices(data.data)
+        } else {
+          console.error("Failed to fetch overdue invoices")
+          toast({
+            title: "Error",
+            description: "Failed to load overdue invoices",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("[v0] Error fetching overdue invoices:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load overdue invoices",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchOverdueInvoices()
+  }, [toast])
 
   const filteredInvoices = overdueInvoices.filter((invoice) => {
     const matchesSearch =
@@ -84,9 +77,10 @@ export default function OverduePage() {
   })
 
   const totalOverdue = overdueInvoices.reduce((sum, invoice) => sum + invoice.amount, 0)
-  const averageDaysOverdue = Math.round(
-    overdueInvoices.reduce((sum, invoice) => sum + invoice.daysOverdue, 0) / overdueInvoices.length,
-  )
+  const averageDaysOverdue =
+    overdueInvoices.length > 0
+      ? Math.round(overdueInvoices.reduce((sum, invoice) => sum + invoice.daysOverdue, 0) / overdueInvoices.length)
+      : 0
 
   const handleSendReminder = (customer: string, email: string) => {
     toast({
@@ -114,6 +108,19 @@ export default function OverduePage() {
       title: "Export Started",
       description: "Overdue invoices report is being generated...",
     })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p>Loading overdue invoices...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -213,71 +220,81 @@ export default function OverduePage() {
           <CardDescription>Follow up on overdue payments and manage customer communications</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Invoice</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead className="hidden md:table-cell">Plan</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Days Overdue</TableHead>
-                  <TableHead className="hidden lg:table-cell">Due Date</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredInvoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-medium">{invoice.id}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{invoice.customer}</div>
-                        <div className="text-sm text-muted-foreground">{invoice.email}</div>
-                        <div className="text-sm text-muted-foreground">{invoice.phone}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">{invoice.plan}</TableCell>
-                    <TableCell>KSh {invoice.amount.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          invoice.daysOverdue > 30 ? "destructive" : invoice.daysOverdue > 7 ? "secondary" : "outline"
-                        }
-                      >
-                        {invoice.daysOverdue} days
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">{invoice.dueDate}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col sm:flex-row gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSendReminder(invoice.customer, invoice.email)}
-                        >
-                          <Mail className="h-3 w-3 mr-1" />
-                          Email
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleCall(invoice.customer, invoice.phone)}>
-                          <Phone className="h-3 w-3 mr-1" />
-                          Call
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSendSMS(invoice.customer, invoice.phone)}
-                        >
-                          <MessageSquare className="h-3 w-3 mr-1" />
-                          SMS
-                        </Button>
-                      </div>
-                    </TableCell>
+          {filteredInvoices.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No overdue invoices found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Invoice</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead className="hidden md:table-cell">Plan</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Days Overdue</TableHead>
+                    <TableHead className="hidden lg:table-cell">Due Date</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">{invoice.id}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{invoice.customer}</div>
+                          <div className="text-sm text-muted-foreground">{invoice.email}</div>
+                          <div className="text-sm text-muted-foreground">{invoice.phone}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">{invoice.plan}</TableCell>
+                      <TableCell>KSh {invoice.amount.toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            invoice.daysOverdue > 30 ? "destructive" : invoice.daysOverdue > 7 ? "secondary" : "outline"
+                          }
+                        >
+                          {invoice.daysOverdue} days
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">{invoice.dueDate}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col sm:flex-row gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendReminder(invoice.customer, invoice.email)}
+                          >
+                            <Mail className="h-3 w-3 mr-1" />
+                            Email
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleCall(invoice.customer, invoice.phone)}
+                          >
+                            <Phone className="h-3 w-3 mr-1" />
+                            Call
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSendSMS(invoice.customer, invoice.phone)}
+                          >
+                            <MessageSquare className="h-3 w-3 mr-1" />
+                            SMS
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

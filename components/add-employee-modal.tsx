@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, Upload, X, User } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
 
 interface AddEmployeeModalProps {
   open: boolean
@@ -36,6 +37,8 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [dateOfBirth, setDateOfBirth] = useState<Date>()
   const [startDate, setStartDate] = useState<Date>()
+  const [createUserAccount, setCreateUserAccount] = useState(true)
+  const [userRole, setUserRole] = useState("employee")
 
   const [formData, setFormData] = useState({
     // Personal Information
@@ -91,18 +94,43 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
       ...prev,
       [field]: value,
     }))
+
+    if (field === "firstName" || field === "lastName") {
+      const firstName = field === "firstName" ? value : formData.firstName
+      const lastName = field === "lastName" ? value : formData.lastName
+      if (firstName && lastName) {
+        const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`
+        setFormData((prev) => ({
+          ...prev,
+          portalUsername: username,
+        }))
+      }
+    }
+
+    if (field === "position") {
+      const position = value.toLowerCase()
+      if (position.includes("manager") || position.includes("supervisor")) {
+        setUserRole("manager")
+      } else if (position.includes("technician")) {
+        setUserRole("technician")
+      } else if (position.includes("accountant")) {
+        setUserRole("accountant")
+      } else if (position.includes("admin")) {
+        setUserRole("administrator")
+      } else {
+        setUserRole("employee")
+      }
+    }
   }
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      // Validate file type
       if (!file.type.startsWith("image/")) {
         alert("Please select an image file")
         return
       }
 
-      // Validate file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         alert("File size must be less than 5MB")
         return
@@ -110,7 +138,6 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
 
       setPhotoFile(file)
 
-      // Create preview
       const reader = new FileReader()
       reader.onload = (e) => {
         setPhotoPreview(e.target?.result as string)
@@ -128,20 +155,16 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
     setIsSubmitting(true)
 
     try {
-      // Create FormData for file upload
       const submitData = new FormData()
 
-      // Add all form fields
       Object.entries(formData).forEach(([key, value]) => {
         submitData.append(key, value)
       })
 
-      // Add photo if uploaded
       if (photoFile) {
         submitData.append("photo", photoFile)
       }
 
-      // Add dates
       if (dateOfBirth) {
         submitData.append("dateOfBirth", dateOfBirth.toISOString())
       }
@@ -149,14 +172,22 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
         submitData.append("startDate", startDate.toISOString())
       }
 
-      // Here you would typically send to your API
-      console.log("Submitting employee data:", formData)
-      console.log("Photo file:", photoFile)
+      submitData.append("createUserAccount", createUserAccount.toString())
+      submitData.append("userRole", userRole)
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await fetch("/api/employees", {
+        method: "POST",
+        body: submitData,
+      })
 
-      // Reset form and close modal
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to add employee")
+      }
+
+      const result = await response.json()
+      console.log("Employee added successfully:", result)
+
       setFormData({
         firstName: "",
         lastName: "",
@@ -199,9 +230,14 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
       setDateOfBirth(undefined)
       setStartDate(undefined)
       setActiveTab("personal")
+      setCreateUserAccount(true)
+      setUserRole("employee")
       onOpenChange(false)
+
+      window.location.reload()
     } catch (error) {
       console.error("Error adding employee:", error)
+      alert(error instanceof Error ? error.message : "Failed to add employee")
     } finally {
       setIsSubmitting(false)
     }
@@ -216,11 +252,12 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="personal">Personal</TabsTrigger>
             <TabsTrigger value="employment">Employment</TabsTrigger>
             <TabsTrigger value="compensation">Compensation</TabsTrigger>
             <TabsTrigger value="statutory">Statutory</TabsTrigger>
+            <TabsTrigger value="access">System Access</TabsTrigger>
             <TabsTrigger value="additional">Additional</TabsTrigger>
           </TabsList>
 
@@ -231,7 +268,6 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
                 <CardDescription>Basic personal details and contact information</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Photo Upload Section */}
                 <div className="flex flex-col items-center space-y-4">
                   <div className="relative">
                     {photoPreview ? (
@@ -716,6 +752,92 @@ export function AddEmployeeModal({ open, onOpenChange }: AddEmployeeModalProps) 
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="access" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>System Access & User Account</CardTitle>
+                <CardDescription>Configure system access and user account settings</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Create User Account</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically create a system user account for this employee
+                    </p>
+                  </div>
+                  <Switch checked={createUserAccount} onCheckedChange={setCreateUserAccount} />
+                </div>
+
+                {createUserAccount && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="portalUsername">Username</Label>
+                        <Input
+                          id="portalUsername"
+                          value={formData.portalUsername}
+                          onChange={(e) => handleInputChange("portalUsername", e.target.value)}
+                          placeholder="firstname.lastname"
+                        />
+                        <p className="text-xs text-muted-foreground">Auto-generated from first and last name</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="userRole">System Role</Label>
+                        <Select value={userRole} onValueChange={setUserRole}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="administrator">Administrator</SelectItem>
+                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="technician">Technician</SelectItem>
+                            <SelectItem value="accountant">Accountant</SelectItem>
+                            <SelectItem value="support">Support Agent</SelectItem>
+                            <SelectItem value="employee">Employee</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">Auto-suggested based on position</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="portalPassword">Temporary Password</Label>
+                      <Input
+                        id="portalPassword"
+                        type="password"
+                        value={formData.portalPassword}
+                        onChange={(e) => handleInputChange("portalPassword", e.target.value)}
+                        placeholder="Leave blank for auto-generated password"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Employee will be required to change password on first login
+                      </p>
+                    </div>
+
+                    <Card className="border-blue-200 bg-blue-50">
+                      <CardContent className="pt-4">
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">Role Permissions Preview</h4>
+                          <div className="text-xs text-muted-foreground">
+                            {userRole === "administrator" && "• Full system access • User management • System settings"}
+                            {userRole === "manager" && "• Department management • Reports • Staff oversight"}
+                            {userRole === "technician" &&
+                              "• Network operations • Technical support • Equipment management"}
+                            {userRole === "accountant" &&
+                              "• Financial reports • Billing management • Payment processing"}
+                            {userRole === "support" && "• Customer support • Ticket management • Basic reports"}
+                            {userRole === "employee" && "• Basic access • Personal information • Time tracking"}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

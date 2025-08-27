@@ -42,7 +42,6 @@ import {
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
-import React from "react"
 
 interface Customer {
   id: number
@@ -505,8 +504,48 @@ function WelcomeModal({ open, onOpenChange, customer, handleSendWelcome, isLoadi
   )
 }
 
+const handleMpesaRequest = async (amount: number, customer: any, setIsLoading: any, setShowMpesaModal: any) => {
+  setIsLoading(true)
+  try {
+    console.log("[v0] Initiating M-Pesa request for customer:", customer.id, "Amount:", amount)
+
+    const response = await fetch("/api/mpesa-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customerId: customer.id, amount, phone: customer.phone }),
+    })
+
+    const result = await response.json()
+
+    if (response.ok) {
+      console.log("[v0] M-Pesa request successful:", result)
+      alert("M-Pesa payment request sent successfully!")
+    } else {
+      console.log("[v0] M-Pesa request failed:", result)
+      throw new Error(result.error || "Failed to send M-Pesa request")
+    }
+  } catch (error) {
+    console.error("[v0] M-Pesa request error:", error)
+    alert("Failed to send M-Pesa request")
+  }
+  setIsLoading(false)
+  setShowMpesaModal(false)
+}
+
 function MpesaModal({ open, onOpenChange, customer, handleMpesaRequest, isLoading }: any) {
+  const [amount, setAmount] = useState<number | undefined>(undefined)
+  const [localLoading, setLocalLoading] = useState(false)
+
   if (!open) return null
+
+  const handleRequest = () => {
+    if (amount !== undefined) {
+      handleMpesaRequest(amount, customer, setLocalLoading, onOpenChange)
+    } else {
+      alert("Please enter a valid amount.")
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
@@ -517,18 +556,17 @@ function MpesaModal({ open, onOpenChange, customer, handleMpesaRequest, isLoadin
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">Amount (KES)</label>
-            <Input type="number" placeholder="Enter amount" id="mpesa-amount" />
+            <Input
+              type="number"
+              placeholder="Enter amount"
+              value={amount !== undefined ? amount.toString() : ""}
+              onChange={(e) => setAmount(Number(e.target.value))}
+            />
           </div>
           <div className="flex gap-3">
-            <Button
-              onClick={() => {
-                const amount = (document.getElementById("mpesa-amount") as HTMLInputElement)?.value
-                if (amount) handleMpesaRequest(Number.parseFloat(amount))
-              }}
-              disabled={isLoading}
-            >
+            <Button onClick={handleRequest} disabled={localLoading || isLoading}>
               <Smartphone className="w-4 h-4 mr-2" />
-              Send Request
+              {localLoading || isLoading ? "Sending..." : "Send Request"}
             </Button>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -596,6 +634,7 @@ export function CustomerDetailsClient({
   const [availableServicePlans, setAvailableServicePlans] = useState([])
   const [selectedServicePlan, setSelectedServicePlan] = useState("")
   const [customerServicesData, setCustomerServices] = useState<any[]>(customerServices)
+  const [showMpesaModal, setShowMpesaModal] = useState(false)
 
   useEffect(() => {
     if (customer) {
@@ -631,7 +670,6 @@ export function CustomerDetailsClient({
   const [showSendMessageModal, setShowSendMessageModal] = useState(false)
   const [showCreateTicketModal, setShowCreateTicketModal] = useState(false)
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
-  const [showMpesaModal, setShowMpesaModal] = useState(false)
   const [showTroubleshootModal, setShowTroubleshootModal] = useState(false)
   const [newMessage, setNewMessage] = useState("")
   const [messageType, setMessageType] = useState("email")
@@ -860,13 +898,6 @@ export function CustomerDetailsClient({
     }
   }
 
-  React.useEffect(() => {
-    if (customer?.id) {
-      loadCustomerServicesData()
-      loadAvailableServicePlans()
-    }
-  }, [customer?.id])
-
   const handleEditService = async (serviceId: string) => {
     try {
       const service = customerServices.find((s) => s.id === serviceId)
@@ -1081,24 +1112,6 @@ export function CustomerDetailsClient({
     }
     setIsLoading(false)
     setShowWelcomeModal(false)
-  }
-
-  const handleMpesaRequest = async (amount: number) => {
-    setIsLoading(true)
-    try {
-      const response = await fetch("/api/mpesa-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId: customer.id, amount, phone: customer.phone }),
-      })
-      if (response.ok) {
-        alert("M-Pesa payment request sent successfully!")
-      }
-    } catch (error) {
-      alert("Failed to send M-Pesa request")
-    }
-    setIsLoading(false)
-    setShowMpesaModal(false)
   }
 
   const handleTroubleshoot = async (action: string) => {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,92 +18,152 @@ export default function UserManagementPage() {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [showPasswords, setShowPasswords] = useState(false)
+  const [users, setUsers] = useState([])
+  const [roles, setRoles] = useState([])
+  const [settings, setSettings] = useState({})
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  useEffect(() => {
+    fetchUserData()
+  }, [])
+
+  const fetchUserData = async () => {
+    try {
+      const response = await fetch("/api/user-management")
+      const data = await response.json()
+      setUsers(data.users || [])
+      setRoles(data.roles || [])
+    } catch (error) {
+      console.error("Error fetching user data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load user data",
+        variant: "destructive",
+      })
+    }
+  }
 
   const handleSave = async () => {
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    toast({
-      title: "Settings saved",
-      description: "User management settings have been updated successfully.",
-    })
+    try {
+      const response = await fetch("/api/user-management", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_settings",
+          data: settings,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Settings saved",
+          description: "User management settings have been updated successfully.",
+        })
+      } else {
+        throw new Error("Failed to save settings")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save settings",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const users = [
-    {
-      id: 1,
-      name: "John Doe",
-      email: "john@techconnect.co.ke",
-      role: "Administrator",
-      department: "IT",
-      status: "active",
-      lastLogin: "2024-01-15 10:30",
-      employeeId: "EMP001",
-    },
-    {
-      id: 2,
-      name: "Jane Smith",
-      email: "jane@techconnect.co.ke",
-      role: "Manager",
-      department: "Customer Service",
-      status: "active",
-      lastLogin: "2024-01-15 09:15",
-      employeeId: "EMP002",
-    },
-    {
-      id: 3,
-      name: "Mike Johnson",
-      email: "mike@techconnect.co.ke",
-      role: "Technician",
-      department: "Network Operations",
-      status: "inactive",
-      lastLogin: "2024-01-10 14:20",
-      employeeId: "EMP003",
-    },
-    {
-      id: 4,
-      name: "Sarah Wilson",
-      email: "sarah@techconnect.co.ke",
-      role: "Accountant",
-      department: "Finance",
-      status: "active",
-      lastLogin: "2024-01-15 08:45",
-      employeeId: "EMP004",
-    },
-  ]
+  const handleUpdateUser = async (userId: string, updates: any) => {
+    try {
+      const response = await fetch(`/api/user-management/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update_user",
+          data: updates,
+        }),
+      })
 
-  const roles = [
-    {
-      name: "Administrator",
-      description: "Full system access and management",
-      permissions: ["All Permissions"],
-      userCount: 2,
-    },
-    {
-      name: "Manager",
-      description: "Department management and reporting",
-      permissions: ["View Reports", "Manage Team", "Customer Management"],
-      userCount: 3,
-    },
-    {
-      name: "Technician",
-      description: "Network and technical operations",
-      permissions: ["Network Management", "Customer Support", "Equipment Management"],
-      userCount: 5,
-    },
-    {
-      name: "Accountant",
-      description: "Financial management and billing",
-      permissions: ["Billing Management", "Financial Reports", "Payment Processing"],
-      userCount: 2,
-    },
-    {
-      name: "Support Agent",
-      description: "Customer support and ticket management",
-      permissions: ["Customer Support", "Ticket Management", "Knowledge Base"],
-      userCount: 4,
-    },
-  ]
+      if (response.ok) {
+        await fetchUserData()
+        toast({
+          title: "User updated",
+          description: "User information has been updated successfully.",
+        })
+      } else {
+        throw new Error("Failed to update user")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update user",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCreateRole = async (roleData: any) => {
+    try {
+      const response = await fetch("/api/user-management", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_role",
+          data: roleData,
+        }),
+      })
+
+      if (response.ok) {
+        await fetchUserData()
+        toast({
+          title: "Role created",
+          description: "New role has been created successfully.",
+        })
+      } else {
+        throw new Error("Failed to create role")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create role",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSyncEmployees = async () => {
+    setIsSyncing(true)
+    try {
+      const response = await fetch("/api/user-management/sync-employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "sync_all",
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        await fetchUserData()
+        toast({
+          title: "Sync completed",
+          description: result.message,
+        })
+      } else {
+        throw new Error(result.error)
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sync employees",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -113,8 +173,8 @@ export default function UserManagementPage() {
           <p className="text-muted-foreground">Manage user accounts, roles, and permissions</p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button variant="outline" onClick={handleSyncEmployees} disabled={isSyncing}>
+            {isSyncing ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
             Sync Employees
           </Button>
           <Button onClick={handleSave} disabled={isLoading}>
@@ -214,7 +274,11 @@ export default function UserManagementPage() {
                         <TableCell className="text-sm">{user.lastLogin}</TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleUpdateUser(user.id, { role: "newRole" })}
+                            >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button variant="outline" size="sm">
@@ -265,7 +329,16 @@ export default function UserManagementPage() {
                   <Shield className="h-5 w-5" />
                   <CardTitle>Roles & Permissions</CardTitle>
                 </div>
-                <Button>
+                <Button
+                  onClick={() =>
+                    handleCreateRole({
+                      name: "newRole",
+                      description: "New role description",
+                      permissions: ["Permission1"],
+                      userCount: 0,
+                    })
+                  }
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Create Role
                 </Button>
@@ -279,7 +352,7 @@ export default function UserManagementPage() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
                         <div>
-                          <Label className="font-medium text-base">{role.name}</Label>
+                          <Label className="font-medium">{role.name}</Label>
                           <p className="text-sm text-muted-foreground">{role.description}</p>
                         </div>
                       </div>
@@ -733,8 +806,12 @@ export default function UserManagementPage() {
               <Separator />
 
               <div className="flex space-x-2">
-                <Button variant="outline">
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                <Button variant="outline" onClick={handleSyncEmployees} disabled={isSyncing}>
+                  {isSyncing ? (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
                   Sync Now
                 </Button>
                 <Button variant="outline">

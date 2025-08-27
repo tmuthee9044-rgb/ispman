@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -41,126 +41,45 @@ export default function HRPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [departmentFilter, setDepartmentFilter] = useState("all")
+  const [employees, setEmployees] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const employees = [
-    {
-      id: 1,
-      employeeId: "EMP001",
-      name: "John Smith",
-      position: "Network Engineer",
-      department: "Technical",
-      status: "active",
-      joinDate: "2023-01-15",
-      salary: 85000,
-      email: "john.smith@company.com",
-      phone: "+254712345678",
-      nationalId: "12345678",
-      kraPin: "A123456789Z",
-      nssfNumber: "123456789",
-      shaNumber: "987654321",
-      contractType: "permanent",
-      leaveBalance: 21,
-      performanceRating: "excellent",
-    },
-    {
-      id: 2,
-      employeeId: "EMP002",
-      name: "Sarah Johnson",
-      position: "Customer Support Manager",
-      department: "Support",
-      status: "active",
-      joinDate: "2023-03-20",
-      salary: 65000,
-      email: "sarah.johnson@company.com",
-      phone: "+254723456789",
-      nationalId: "23456789",
-      kraPin: "B234567890Z",
-      nssfNumber: "234567890",
-      shaNumber: "876543210",
-      contractType: "permanent",
-      leaveBalance: 18,
-      performanceRating: "good",
-    },
-    {
-      id: 3,
-      employeeId: "EMP003",
-      name: "Mike Wilson",
-      position: "Sales Manager",
-      department: "Sales",
-      status: "on_leave",
-      joinDate: "2022-11-10",
-      salary: 75000,
-      email: "mike.wilson@company.com",
-      phone: "+254734567890",
-      nationalId: "34567890",
-      kraPin: "C345678901Z",
-      nssfNumber: "345678901",
-      shaNumber: "765432109",
-      contractType: "permanent",
-      leaveBalance: 5,
-      performanceRating: "good",
-    },
-    {
-      id: 4,
-      employeeId: "EMP004",
-      name: "Grace Wanjiku",
-      position: "HR Officer",
-      department: "HR",
-      status: "active",
-      joinDate: "2023-06-01",
-      salary: 55000,
-      email: "grace.wanjiku@company.com",
-      phone: "+254745678901",
-      nationalId: "45678901",
-      kraPin: "D456789012Z",
-      nssfNumber: "456789012",
-      shaNumber: "654321098",
-      contractType: "permanent",
-      leaveBalance: 15,
-      performanceRating: "excellent",
-    },
-  ]
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
 
-  const leaveRequests = [
-    {
-      id: 1,
-      employeeId: "EMP003",
-      employeeName: "Mike Wilson",
-      leaveType: "Annual Leave",
-      startDate: "2024-01-15",
-      endDate: "2024-01-25",
-      days: 10,
-      status: "approved",
-      reason: "Family vacation",
-    },
-    {
-      id: 2,
-      employeeId: "EMP001",
-      employeeName: "John Smith",
-      leaveType: "Sick Leave",
-      startDate: "2024-01-20",
-      endDate: "2024-01-22",
-      days: 3,
-      status: "pending",
-      reason: "Medical appointment",
-    },
-  ]
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/employees")
+      if (!response.ok) {
+        throw new Error("Failed to fetch employees")
+      }
+      const data = await response.json()
+      setEmployees(data.employees || [])
+    } catch (error) {
+      console.error("Error fetching employees:", error)
+      setEmployees([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const payrollSummary = {
-    totalEmployees: 24,
-    totalGrossPay: 1680000,
-    totalDeductions: 420000,
-    totalNetPay: 1260000,
-    totalPaye: 252000,
-    totalNssf: 84000,
-    totalSha: 84000,
+    totalEmployees: employees.length,
+    totalGrossPay: employees.reduce((sum, emp) => sum + (emp.salary || 0), 0),
+    totalDeductions: employees.reduce((sum, emp) => sum + (emp.salary || 0) * 0.25, 0),
+    totalNetPay: employees.reduce((sum, emp) => sum + (emp.salary || 0) * 0.75, 0),
+    totalPaye: employees.reduce((sum, emp) => sum + (emp.salary || 0) * 0.15, 0),
+    totalNssf: employees.reduce((sum, emp) => sum + (emp.salary || 0) * 0.05, 0),
+    totalSha: employees.reduce((sum, emp) => sum + (emp.salary || 0) * 0.05, 0),
   }
 
   const filteredEmployees = employees.filter((employee) => {
     const matchesSearch =
-      employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.employeeId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employee.position.toLowerCase().includes(searchTerm.toLowerCase())
+      employee.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.employee_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      employee.position?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesDepartment = departmentFilter === "all" || employee.department === departmentFilter
     return matchesSearch && matchesDepartment
   })
@@ -168,6 +87,19 @@ export default function HRPage() {
   const handleViewEmployee = (employee: any) => {
     setSelectedEmployee(employee)
     setShowEmployeeDetails(true)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-600">Loading employees...</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -204,8 +136,8 @@ export default function HRPage() {
                 <Users className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">24</div>
-                <p className="text-xs text-muted-foreground">+2 from last month</p>
+                <div className="text-2xl font-bold">{employees.length}</div>
+                <p className="text-xs text-muted-foreground">Active employees</p>
               </CardContent>
             </Card>
             <Card>
@@ -214,8 +146,8 @@ export default function HRPage() {
                 <UserCheck className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">23</div>
-                <p className="text-xs text-muted-foreground">95.8% active rate</p>
+                <div className="text-2xl font-bold">{employees.filter((emp) => emp.status === "active").length}</div>
+                <p className="text-xs text-muted-foreground">Currently active</p>
               </CardContent>
             </Card>
             <Card>
@@ -224,8 +156,8 @@ export default function HRPage() {
                 <Calendar className="h-4 w-4 text-yellow-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">1</div>
-                <p className="text-xs text-muted-foreground">Annual leave</p>
+                <div className="text-2xl font-bold">{employees.filter((emp) => emp.status === "on_leave").length}</div>
+                <p className="text-xs text-muted-foreground">Currently on leave</p>
               </CardContent>
             </Card>
             <Card>
@@ -234,7 +166,7 @@ export default function HRPage() {
                 <DollarSign className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrencyCompact(1260000)}</div>
+                <div className="text-2xl font-bold">{formatCurrencyCompact(payrollSummary.totalNetPay)}</div>
                 <p className="text-xs text-muted-foreground">Net pay this month</p>
               </CardContent>
             </Card>
@@ -250,23 +182,33 @@ export default function HRPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Technical</span>
-                    <span className="text-sm font-medium">8 employees</span>
+                    <span className="text-sm font-medium">
+                      {employees.filter((emp) => emp.department === "Technical").length} employees
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Support</span>
-                    <span className="text-sm font-medium">6 employees</span>
+                    <span className="text-sm font-medium">
+                      {employees.filter((emp) => emp.department === "Support").length} employees
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Sales</span>
-                    <span className="text-sm font-medium">5 employees</span>
+                    <span className="text-sm font-medium">
+                      {employees.filter((emp) => emp.department === "Sales").length} employees
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Admin</span>
-                    <span className="text-sm font-medium">3 employees</span>
+                    <span className="text-sm font-medium">
+                      {employees.filter((emp) => emp.department === "Admin").length} employees
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Finance</span>
-                    <span className="text-sm font-medium">2 employees</span>
+                    <span className="text-sm font-medium">
+                      {employees.filter((emp) => emp.department === "Finance").length} employees
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -346,14 +288,13 @@ export default function HRPage() {
                     <TableHead>Department</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Salary</TableHead>
-                    <TableHead>Leave Balance</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredEmployees.map((employee) => (
                     <TableRow key={employee.id}>
-                      <TableCell className="font-medium">{employee.employeeId}</TableCell>
+                      <TableCell className="font-medium">{employee.employee_id}</TableCell>
                       <TableCell>{employee.name}</TableCell>
                       <TableCell>{employee.position}</TableCell>
                       <TableCell>{employee.department}</TableCell>
@@ -367,11 +308,10 @@ export default function HRPage() {
                                 : "destructive"
                           }
                         >
-                          {employee.status.replace("_", " ")}
+                          {employee.status?.replace("_", " ")}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatCurrency(employee.salary)}</TableCell>
-                      <TableCell>{employee.leaveBalance} days</TableCell>
+                      <TableCell>{employee.salary ? formatCurrency(employee.salary) : "N/A"}</TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
                           <Button variant="outline" size="sm" onClick={() => handleViewEmployee(employee)}>
@@ -469,10 +409,10 @@ export default function HRPage() {
                 <TableBody>
                   <TableRow>
                     <TableCell>January 2024</TableCell>
-                    <TableCell>24</TableCell>
-                    <TableCell>{formatCurrency(1680000)}</TableCell>
-                    <TableCell>{formatCurrency(420000)}</TableCell>
-                    <TableCell>{formatCurrency(1260000)}</TableCell>
+                    <TableCell>{employees.length}</TableCell>
+                    <TableCell>{formatCurrency(payrollSummary.totalGrossPay)}</TableCell>
+                    <TableCell>{formatCurrency(payrollSummary.totalDeductions)}</TableCell>
+                    <TableCell>{formatCurrency(payrollSummary.totalNetPay)}</TableCell>
                     <TableCell>
                       <Badge>Processed</Badge>
                     </TableCell>
@@ -484,7 +424,7 @@ export default function HRPage() {
                   </TableRow>
                   <TableRow>
                     <TableCell>December 2023</TableCell>
-                    <TableCell>23</TableCell>
+                    <TableCell>{employees.length - 1}</TableCell>
                     <TableCell>{formatCurrency(1610000)}</TableCell>
                     <TableCell>{formatCurrency(402500)}</TableCell>
                     <TableCell>{formatCurrency(1207500)}</TableCell>
@@ -563,47 +503,7 @@ export default function HRPage() {
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-                <TableBody>
-                  {leaveRequests.map((request) => (
-                    <TableRow key={request.id}>
-                      <TableCell className="font-medium">{request.employeeName}</TableCell>
-                      <TableCell>{request.leaveType}</TableCell>
-                      <TableCell>{request.startDate}</TableCell>
-                      <TableCell>{request.endDate}</TableCell>
-                      <TableCell>{request.days}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            request.status === "approved"
-                              ? "default"
-                              : request.status === "pending"
-                                ? "secondary"
-                                : "destructive"
-                          }
-                        >
-                          {request.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {request.status === "pending" && (
-                            <>
-                              <Button variant="outline" size="sm" className="text-green-600 bg-transparent">
-                                Approve
-                              </Button>
-                              <Button variant="outline" size="sm" className="text-red-600 bg-transparent">
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
+                <TableBody>{/* Placeholder for dynamic leave requests */}</TableBody>
               </Table>
             </CardContent>
           </Card>
@@ -625,7 +525,9 @@ export default function HRPage() {
                 <Award className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">8</div>
+                <div className="text-2xl font-bold">
+                  {employees.filter((emp) => emp.performance_rating === "excellent").length}
+                </div>
                 <p className="text-xs text-muted-foreground">33% of employees</p>
               </CardContent>
             </Card>
@@ -635,7 +537,9 @@ export default function HRPage() {
                 <TrendingUp className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">12</div>
+                <div className="text-2xl font-bold">
+                  {employees.filter((emp) => emp.performance_rating === "good").length}
+                </div>
                 <p className="text-xs text-muted-foreground">50% of employees</p>
               </CardContent>
             </Card>
@@ -645,7 +549,9 @@ export default function HRPage() {
                 <Users className="h-4 w-4 text-yellow-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">3</div>
+                <div className="text-2xl font-bold">
+                  {employees.filter((emp) => emp.performance_rating === "satisfactory").length}
+                </div>
                 <p className="text-xs text-muted-foreground">12.5% of employees</p>
               </CardContent>
             </Card>
@@ -655,7 +561,9 @@ export default function HRPage() {
                 <AlertTriangle className="h-4 w-4 text-red-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">1</div>
+                <div className="text-2xl font-bold">
+                  {employees.filter((emp) => emp.performance_rating === "needs_improvement").length}
+                </div>
                 <p className="text-xs text-muted-foreground">4.2% of employees</p>
               </CardContent>
             </Card>
@@ -688,14 +596,14 @@ export default function HRPage() {
                       <TableCell>
                         <Badge
                           variant={
-                            employee.performanceRating === "excellent"
+                            employee.performance_rating === "excellent"
                               ? "default"
-                              : employee.performanceRating === "good"
+                              : employee.performance_rating === "good"
                                 ? "secondary"
                                 : "outline"
                           }
                         >
-                          {employee.performanceRating}
+                          {employee.performance_rating}
                         </Badge>
                       </TableCell>
                       <TableCell>85%</TableCell>
@@ -775,19 +683,19 @@ export default function HRPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">PAYE (Pay As You Earn)</span>
-                    <span className="text-sm">{formatCurrency(252000)}</span>
+                    <span className="text-sm">{formatCurrency(payrollSummary.totalPaye)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">NSSF Contributions</span>
-                    <span className="text-sm">{formatCurrency(84000)}</span>
+                    <span className="text-sm">{formatCurrency(payrollSummary.totalNssf)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">SHA Contributions</span>
-                    <span className="text-sm">{formatCurrency(84000)}</span>
+                    <span className="text-sm">{formatCurrency(payrollSummary.totalSha)}</span>
                   </div>
                   <div className="flex items-center justify-between border-t pt-2">
                     <span className="text-sm font-medium">Total Statutory</span>
-                    <span className="text-sm font-bold">{formatCurrency(420000)}</span>
+                    <span className="text-sm font-bold">{formatCurrency(payrollSummary.totalDeductions)}</span>
                   </div>
                 </div>
               </CardContent>

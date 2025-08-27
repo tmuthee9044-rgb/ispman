@@ -2,6 +2,7 @@
 
 import { neon } from "@neondatabase/serverless"
 import { revalidatePath } from "next/cache"
+import { ActivityLogger } from "@/lib/activity-logger"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -12,6 +13,18 @@ export async function processSmartPayment(formData: FormData) {
     const method = formData.get("method") as string
     const reference = formData.get("reference") as string
 
+    await ActivityLogger.logAdminActivity(
+      `Processing ${method} payment: KES ${amount} for customer ${customerId}`,
+      "system",
+      {
+        customer_id: customerId,
+        amount,
+        payment_method: method,
+        reference,
+        action: "payment_processing_start",
+      },
+    )
+
     const customerServices = await sql`
       SELECT cs.*, sp.name as service_plan_name 
       FROM customer_services cs 
@@ -20,6 +33,12 @@ export async function processSmartPayment(formData: FormData) {
     `
 
     if (!customerServices || customerServices.length === 0) {
+      await ActivityLogger.logAdminActivity(`Payment failed: No active services for customer ${customerId}`, "system", {
+        customer_id: customerId,
+        amount,
+        payment_method: method,
+        error: "no_active_services",
+      })
       return { success: false, error: "No active services found for customer" }
     }
 
@@ -58,6 +77,31 @@ export async function processSmartPayment(formData: FormData) {
       remainingAmount -= allocatedAmount
     }
 
+    if (method.toLowerCase().includes("mpesa") || method.toLowerCase().includes("m-pesa")) {
+      await ActivityLogger.logMpesaActivity(
+        `Payment completed: KES ${amount}`,
+        reference,
+        {
+          customer_id: customerId,
+          payment_id: paymentId,
+          amount,
+          payment_method: method,
+          reference,
+          status: "completed",
+        },
+        "SUCCESS",
+      )
+    } else {
+      await ActivityLogger.logAdminActivity(`Payment completed: KES ${amount} via ${method}`, "system", {
+        customer_id: customerId,
+        payment_id: paymentId,
+        amount,
+        payment_method: method,
+        reference,
+        status: "completed",
+      })
+    }
+
     revalidatePath(`/customers/${customerId}`)
 
     return {
@@ -67,6 +111,21 @@ export async function processSmartPayment(formData: FormData) {
       paymentId,
     }
   } catch (error) {
+    const customerId = Number.parseInt(formData.get("customer_id") as string)
+    const amount = Number.parseFloat(formData.get("amount") as string)
+    const method = formData.get("method") as string
+
+    await ActivityLogger.logAdminActivity(
+      `Payment processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      "system",
+      {
+        customer_id: customerId,
+        amount,
+        payment_method: method,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+    )
+
     console.error("Error processing smart payment:", error)
     return { success: false, error: "Failed to process payment" }
   }

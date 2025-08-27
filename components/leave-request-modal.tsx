@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -12,14 +12,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { CalendarIcon, AlertCircle, Info } from "lucide-react"
+import { CalendarIcon, Info } from "lucide-react"
 import { format, differenceInDays } from "date-fns"
 
 interface LeaveRequestModalProps {
@@ -33,13 +32,26 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
   const [startDate, setStartDate] = useState<Date>()
   const [endDate, setEndDate] = useState<Date>()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [employees, setEmployees] = useState<any[]>([])
+  const [reason, setReason] = useState("")
 
-  const employees = [
-    { id: "EMP001", name: "John Smith", leaveBalance: 21 },
-    { id: "EMP002", name: "Sarah Johnson", leaveBalance: 18 },
-    { id: "EMP003", name: "Mike Wilson", leaveBalance: 5 },
-    { id: "EMP004", name: "Grace Wanjiku", leaveBalance: 15 },
-  ]
+  useEffect(() => {
+    if (open) {
+      fetchEmployees()
+    }
+  }, [open])
+
+  const fetchEmployees = async () => {
+    try {
+      const response = await fetch("/api/employees")
+      if (response.ok) {
+        const data = await response.json()
+        setEmployees(data.employees || [])
+      }
+    } catch (error) {
+      console.error("Error fetching employees:", error)
+    }
+  }
 
   const leaveTypes = [
     {
@@ -86,7 +98,7 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
     },
   ]
 
-  const selectedEmployeeData = employees.find((emp) => emp.id === selectedEmployee)
+  const selectedEmployeeData = employees.find((emp) => emp.employee_id === selectedEmployee)
   const selectedLeaveType = leaveTypes.find((type) => type.value === leaveType)
   const leaveDays = startDate && endDate ? differenceInDays(endDate, startDate) + 1 : 0
 
@@ -95,18 +107,32 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
     setIsSubmitting(true)
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      console.log("Leave request submitted:", {
-        employee: selectedEmployee,
-        leaveType,
-        startDate,
-        endDate,
-        days: leaveDays,
+      const response = await fetch("/api/leave-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          employeeId: selectedEmployee,
+          leaveType,
+          startDate: startDate?.toISOString(),
+          endDate: endDate?.toISOString(),
+          days: leaveDays,
+          reason,
+        }),
       })
 
-      onOpenChange(false)
+      if (response.ok) {
+        // Reset form and close modal
+        setSelectedEmployee("")
+        setLeaveType("")
+        setStartDate(undefined)
+        setEndDate(undefined)
+        setReason("")
+        onOpenChange(false)
+      } else {
+        console.error("Failed to submit leave request")
+      }
     } catch (error) {
       console.error("Error submitting leave request:", error)
     } finally {
@@ -132,8 +158,8 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name} ({employee.id})
+                    <SelectItem key={employee.employee_id} value={employee.employee_id}>
+                      {employee.name} ({employee.employee_id})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -211,22 +237,9 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
                 {selectedEmployeeData && leaveType === "annual" && (
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-sm text-muted-foreground">Remaining Balance:</span>
-                    <span className="text-sm">{selectedEmployeeData.leaveBalance - leaveDays} days</span>
+                    <span className="text-sm">21 days (estimated)</span>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {selectedEmployeeData && leaveType === "annual" && leaveDays > selectedEmployeeData.leaveBalance && (
-            <Card className="border-red-200 bg-red-50">
-              <CardContent className="pt-6">
-                <div className="flex items-center space-x-2">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <span className="text-sm text-red-800">
-                    Insufficient leave balance. Employee has only {selectedEmployeeData.leaveBalance} days remaining.
-                  </span>
-                </div>
               </CardContent>
             </Card>
           )}
@@ -235,24 +248,12 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
             <Label htmlFor="reason">Reason for Leave *</Label>
             <Textarea
               id="reason"
-              name="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
               placeholder="Please provide a reason for the leave request..."
               required
             />
           </div>
-
-          {(leaveType === "sick" || leaveType === "compassionate") && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="emergencyContact">Emergency Contact Name</Label>
-                <Input id="emergencyContact" name="emergencyContact" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emergencyPhone">Emergency Contact Phone</Label>
-                <Input id="emergencyPhone" name="emergencyPhone" placeholder="+254..." />
-              </div>
-            </div>
-          )}
 
           {leaveType === "maternity" && (
             <Card className="border-blue-200 bg-blue-50">
@@ -307,7 +308,7 @@ export function LeaveRequestModal({ open, onOpenChange }: LeaveRequestModalProps
                 !startDate ||
                 !endDate ||
                 leaveDays <= 0 ||
-                (leaveType === "annual" && selectedEmployeeData && leaveDays > selectedEmployeeData.leaveBalance)
+                !reason.trim()
               }
             >
               {isSubmitting ? "Submitting..." : "Submit Leave Request"}

@@ -6,48 +6,176 @@ const sql = neon(process.env.DATABASE_URL!)
 export async function GET() {
   try {
     const settings = await sql`
-      SELECT setting_type, setting_key, setting_value, is_encrypted
-      FROM communication_settings
-      WHERE active = true
-      ORDER BY setting_type, setting_key
+      SELECT config_key, config_value 
+      FROM system_config 
+      WHERE config_key LIKE 'communication.%'
     `
 
-    // Group settings by type
-    const groupedSettings = settings.reduce((acc: any, setting) => {
-      if (!acc[setting.setting_type]) {
-        acc[setting.setting_type] = {}
-      }
-      // Don't return encrypted values in plain text
-      acc[setting.setting_type][setting.setting_key] = setting.is_encrypted ? "***" : setting.setting_value
-      return acc
-    }, {})
+    const commConfig = {
+      email: {
+        enabled: false,
+        smtpHost: "",
+        smtpPort: "587",
+        smtpUsername: "",
+        smtpPassword: "",
+        fromName: "",
+        fromEmail: "",
+        replyTo: "",
+        encryption: "tls",
+        htmlEmails: true,
+        emailTracking: false,
+        autoRetry: true,
+        emailQueue: true,
+        maxRetries: "3",
+        retryDelay: "5",
+        batchSize: "50",
+      },
+      sms: {
+        enabled: false,
+        provider: "africastalking",
+        username: "",
+        apiKey: "",
+        senderId: "",
+        endpoint: "",
+        deliveryReports: true,
+        unicodeSupport: false,
+        autoRetry: true,
+        smsQueue: true,
+        maxRetries: "3",
+        retryDelay: "2",
+        batchSize: "100",
+        costPerMessage: "2.50",
+        dailyLimit: "1000",
+        budgetAlerts: true,
+      },
+      notifications: {
+        paymentReminders: { email: true, sms: true },
+        paymentConfirmations: { email: true, sms: true },
+        serviceActivation: { email: true, sms: false },
+        serviceSuspension: { email: true, sms: true },
+        maintenanceAlerts: { email: true, sms: false },
+        staffNotifications: {
+          newCustomer: { enabled: true },
+          paymentFailures: { enabled: true },
+          supportTickets: { enabled: true },
+          systemAlerts: { enabled: true },
+        },
+        timing: {
+          reminderDays: "3",
+          overdueFrequency: "daily",
+          maintenanceNotice: "24",
+          quietHours: "22-06",
+        },
+      },
+    }
 
-    return NextResponse.json({ success: true, settings: groupedSettings })
+    settings.forEach((setting) => {
+      const keys = setting.config_key.replace("communication.", "").split(".")
+      const value = JSON.parse(setting.config_value)
+
+      if (keys[0] === "email") {
+        commConfig.email[keys[1]] = value
+      } else if (keys[0] === "sms") {
+        commConfig.sms[keys[1]] = value
+      } else if (keys[0] === "notifications") {
+        if (keys[1] === "timing") {
+          commConfig.notifications.timing[keys[2]] = value
+        } else if (keys[1] === "staffNotifications") {
+          commConfig.notifications.staffNotifications[keys[2]] = value
+        } else {
+          commConfig.notifications[keys[1]] = value
+        }
+      }
+    })
+
+    return NextResponse.json(commConfig)
   } catch (error) {
     console.error("Error fetching communication settings:", error)
-    return NextResponse.json({ success: false, error: "Failed to fetch settings" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch communication settings" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { settingType, settings } = await request.json()
+    const body = await request.json()
+    const { type, settings } = body
 
-    // Update settings for the specified type
-    for (const [key, value] of Object.entries(settings)) {
-      const isEncrypted = ["password", "api_key", "token"].some((field) => key.includes(field))
-
-      await sql`
-        INSERT INTO communication_settings (setting_type, setting_key, setting_value, is_encrypted)
-        VALUES (${settingType}, ${key}, ${value as string}, ${isEncrypted})
-        ON CONFLICT (setting_type, setting_key)
-        DO UPDATE SET setting_value = ${value as string}, updated_at = NOW()
-      `
+    if (type === "email") {
+      for (const [key, value] of Object.entries(settings)) {
+        await sql`
+          INSERT INTO system_config (config_key, config_value, updated_at)
+          VALUES (${`communication.email.${key}`}, ${JSON.stringify(value)}, NOW())
+          ON CONFLICT (config_key) 
+          DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+        `
+      }
     }
 
-    return NextResponse.json({ success: true, message: "Settings updated successfully" })
+    if (type === "sms") {
+      for (const [key, value] of Object.entries(settings)) {
+        await sql`
+          INSERT INTO system_config (config_key, config_value, updated_at)
+          VALUES (${`communication.sms.${key}`}, ${JSON.stringify(value)}, NOW())
+          ON CONFLICT (config_key) 
+          DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+        `
+      }
+    }
+
+    if (type === "notifications") {
+      for (const [key, value] of Object.entries(settings)) {
+        await sql`
+          INSERT INTO system_config (config_key, config_value, updated_at)
+          VALUES (${`communication.notifications.${key}`}, ${JSON.stringify(value)}, NOW())
+          ON CONFLICT (config_key) 
+          DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+        `
+      }
+    }
+
+    if (type === "all") {
+      const allSettings = settings as any
+
+      // Save email settings
+      if (allSettings.email) {
+        for (const [key, value] of Object.entries(allSettings.email)) {
+          await sql`
+            INSERT INTO system_config (config_key, config_value, updated_at)
+            VALUES (${`communication.email.${key}`}, ${JSON.stringify(value)}, NOW())
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+          `
+        }
+      }
+
+      // Save SMS settings
+      if (allSettings.sms) {
+        for (const [key, value] of Object.entries(allSettings.sms)) {
+          await sql`
+            INSERT INTO system_config (config_key, config_value, updated_at)
+            VALUES (${`communication.sms.${key}`}, ${JSON.stringify(value)}, NOW())
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+          `
+        }
+      }
+
+      // Save notification settings
+      if (allSettings.notifications) {
+        for (const [key, value] of Object.entries(allSettings.notifications)) {
+          await sql`
+            INSERT INTO system_config (config_key, config_value, updated_at)
+            VALUES (${`communication.notifications.${key}`}, ${JSON.stringify(value)}, NOW())
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = ${JSON.stringify(value)}, updated_at = NOW()
+          `
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error updating communication settings:", error)
-    return NextResponse.json({ success: false, error: "Failed to update settings" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update communication settings" }, { status: 500 })
   }
 }

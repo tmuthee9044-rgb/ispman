@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { User, Mail, Phone, Briefcase, DollarSign, Shield, FileText, Edit, Download } from "lucide-react"
+import { formatCurrency } from "@/lib/currency"
 
 interface EmployeeDetailsModalProps {
   open: boolean
@@ -17,15 +18,19 @@ interface EmployeeDetailsModalProps {
 export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeDetailsModalProps) {
   if (!employee) return null
 
+  const employeeName = employee.name || `${employee.first_name || ""} ${employee.last_name || ""}`.trim()
+  const employeeId = employee.employee_id || employee.id
+  const salary = employee.salary || 0
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <div>
-              <DialogTitle className="text-2xl">{employee.name}</DialogTitle>
+              <DialogTitle className="text-2xl">{employeeName}</DialogTitle>
               <DialogDescription>
-                {employee.employeeId} • {employee.position}
+                {employeeId} • {employee.position}
               </DialogDescription>
             </div>
             <div className="flex items-center space-x-2">
@@ -38,7 +43,7 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                       : "destructive"
                 }
               >
-                {employee.status.replace("_", " ")}
+                {employee.status?.replace("_", " ") || "active"}
               </Badge>
               <Button variant="outline" size="sm">
                 <Edit className="mr-2 h-4 w-4" />
@@ -73,20 +78,20 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div className="flex items-center space-x-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{employee.email}</span>
+                    <span className="text-sm">{employee.email || "N/A"}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{employee.phone}</span>
+                    <span className="text-sm">{employee.phone || "N/A"}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">ID: {employee.nationalId}</span>
+                    <span className="text-sm">ID: {employeeId}</span>
                   </div>
                   <Separator />
                   <div>
                     <p className="text-sm font-medium">Emergency Contact</p>
-                    <p className="text-sm text-muted-foreground">John Doe - +254712345678</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                 </CardContent>
               </Card>
@@ -101,20 +106,22 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium">Department</p>
-                    <p className="text-sm text-muted-foreground">{employee.department}</p>
+                    <p className="text-sm text-muted-foreground">{employee.department || "N/A"}</p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium">Join Date</p>
-                    <p className="text-sm text-muted-foreground">{employee.joinDate}</p>
+                    <p className="text-sm font-medium">Hire Date</p>
+                    <p className="text-sm text-muted-foreground">
+                      {employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : "N/A"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Contract Type</p>
-                    <p className="text-sm text-muted-foreground">{employee.contractType}</p>
+                    <p className="text-sm text-muted-foreground">Permanent</p>
                   </div>
                   <Separator />
                   <div>
                     <p className="text-sm font-medium">Leave Balance</p>
-                    <p className="text-sm text-muted-foreground">{employee.leaveBalance} days remaining</p>
+                    <p className="text-sm text-muted-foreground">21 days remaining</p>
                   </div>
                 </CardContent>
               </Card>
@@ -127,20 +134,27 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
               <CardContent>
                 <div className="grid gap-4 md:grid-cols-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold">KSh {employee.salary.toLocaleString()}</div>
+                    <div className="text-2xl font-bold">{formatCurrency(salary)}</div>
                     <p className="text-xs text-muted-foreground">Monthly Salary</p>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">{employee.leaveBalance}</div>
+                    <div className="text-2xl font-bold">21</div>
                     <p className="text-xs text-muted-foreground">Leave Days</p>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">2.5</div>
+                    <div className="text-2xl font-bold">
+                      {employee.hire_date
+                        ? Math.floor(
+                            (new Date().getTime() - new Date(employee.hire_date).getTime()) /
+                              (1000 * 60 * 60 * 24 * 365.25),
+                          )
+                        : 0}
+                    </div>
                     <p className="text-xs text-muted-foreground">Years Service</p>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold">
-                      <Badge variant="default">{employee.performanceRating}</Badge>
+                      <Badge variant="default">Good</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">Performance</p>
                   </div>
@@ -158,19 +172,19 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium">Employee ID</p>
-                    <p className="text-sm text-muted-foreground">{employee.employeeId}</p>
+                    <p className="text-sm text-muted-foreground">{employeeId}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Position</p>
-                    <p className="text-sm text-muted-foreground">{employee.position}</p>
+                    <p className="text-sm text-muted-foreground">{employee.position || "N/A"}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Department</p>
-                    <p className="text-sm text-muted-foreground">{employee.department}</p>
+                    <p className="text-sm text-muted-foreground">{employee.department || "N/A"}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Reporting Manager</p>
-                    <p className="text-sm text-muted-foreground">Sarah Johnson</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                 </CardContent>
               </Card>
@@ -186,11 +200,13 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                   </div>
                   <div>
                     <p className="text-sm font-medium">Contract Type</p>
-                    <p className="text-sm text-muted-foreground">{employee.contractType}</p>
+                    <p className="text-sm text-muted-foreground">Permanent</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Start Date</p>
-                    <p className="text-sm text-muted-foreground">{employee.joinDate}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : "N/A"}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Work Location</p>
@@ -208,24 +224,12 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
               <CardContent>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Promoted to Senior Network Engineer</p>
-                      <p className="text-xs text-muted-foreground">January 2024</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">Completed probation period</p>
-                      <p className="text-xs text-muted-foreground">April 2023</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Started as Network Engineer</p>
-                      <p className="text-xs text-muted-foreground">{employee.joinDate}</p>
+                      <p className="text-sm font-medium">Started as {employee.position}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : "N/A"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -245,15 +249,15 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium">Basic Salary</p>
-                    <p className="text-lg font-bold">KSh {employee.salary.toLocaleString()}</p>
+                    <p className="text-lg font-bold">{formatCurrency(salary)}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Monthly Allowances</p>
-                    <p className="text-sm text-muted-foreground">KSh 15,000</p>
+                    <p className="text-sm text-muted-foreground">KSh 5,000</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Gross Monthly Pay</p>
-                    <p className="text-lg font-bold">KSh {(employee.salary + 15000).toLocaleString()}</p>
+                    <p className="text-lg font-bold">{formatCurrency(salary + 5000)}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -265,11 +269,11 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium">Bank Name</p>
-                    <p className="text-sm text-muted-foreground">KCB Bank</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Account Number</p>
-                    <p className="text-sm text-muted-foreground">1234567890</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">Payroll Frequency</p>
@@ -289,25 +293,11 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Current Salary</p>
-                      <p className="text-xs text-muted-foreground">Effective January 2024</p>
+                      <p className="text-xs text-muted-foreground">
+                        Effective {employee.hire_date ? new Date(employee.hire_date).toLocaleDateString() : "N/A"}
+                      </p>
                     </div>
-                    <p className="text-sm font-bold">KSh {employee.salary.toLocaleString()}</p>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Previous Salary</p>
-                      <p className="text-xs text-muted-foreground">January 2023 - December 2023</p>
-                    </div>
-                    <p className="text-sm">KSh 75,000</p>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Starting Salary</p>
-                      <p className="text-xs text-muted-foreground">January 2023</p>
-                    </div>
-                    <p className="text-sm">KSh 65,000</p>
+                    <p className="text-sm font-bold">{formatCurrency(salary)}</p>
                   </div>
                 </div>
               </CardContent>
@@ -326,15 +316,15 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div>
                     <p className="text-sm font-medium">KRA PIN</p>
-                    <p className="text-sm text-muted-foreground">{employee.kraPin}</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">NSSF Number</p>
-                    <p className="text-sm text-muted-foreground">{employee.nssfNumber}</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium">SHA Number</p>
-                    <p className="text-sm text-muted-foreground">{employee.shaNumber}</p>
+                    <p className="text-sm text-muted-foreground">Not specified</p>
                   </div>
                 </CardContent>
               </Card>
@@ -346,20 +336,20 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-sm">PAYE</span>
-                    <span className="text-sm font-medium">KSh 12,750</span>
+                    <span className="text-sm font-medium">{formatCurrency(salary * 0.15)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm">NSSF</span>
-                    <span className="text-sm font-medium">KSh 6,000</span>
+                    <span className="text-sm font-medium">{formatCurrency(salary * 0.06)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm">SHA</span>
-                    <span className="text-sm font-medium">KSh 2,750</span>
+                    <span className="text-sm font-medium">{formatCurrency(salary * 0.0275)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between font-medium">
                     <span className="text-sm">Total Deductions</span>
-                    <span className="text-sm">KSh 21,500</span>
+                    <span className="text-sm">{formatCurrency(salary * 0.2375)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -408,7 +398,7 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                   <div>
                     <p className="text-sm font-medium">Overall Rating</p>
                     <Badge variant="default" className="mt-1">
-                      {employee.performanceRating}
+                      Good
                     </Badge>
                   </div>
                   <div>
@@ -431,10 +421,10 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                   <CardTitle>Key Achievements</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <div className="text-sm">• Led network infrastructure upgrade project</div>
-                  <div className="text-sm">• Reduced system downtime by 40%</div>
-                  <div className="text-sm">• Mentored 2 junior engineers</div>
-                  <div className="text-sm">• Completed advanced networking certification</div>
+                  <div className="text-sm">• Excellent work performance</div>
+                  <div className="text-sm">• Meets all deadlines</div>
+                  <div className="text-sm">• Good team collaboration</div>
+                  <div className="text-sm">• Professional development ongoing</div>
                 </CardContent>
               </Card>
             </div>
@@ -451,19 +441,12 @@ export function EmployeeDetailsModal({ open, onOpenChange, employee }: EmployeeD
                       <p className="text-sm font-medium">Q4 2023</p>
                       <p className="text-xs text-muted-foreground">Annual Review</p>
                     </div>
-                    <Badge variant="default">Excellent</Badge>
+                    <Badge variant="default">Good</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">Q2 2023</p>
                       <p className="text-xs text-muted-foreground">Mid-year Review</p>
-                    </div>
-                    <Badge variant="secondary">Good</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Q4 2022</p>
-                      <p className="text-xs text-muted-foreground">Probation Review</p>
                     </div>
                     <Badge variant="secondary">Good</Badge>
                   </div>

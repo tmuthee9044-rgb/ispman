@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,77 +21,62 @@ import {
 } from "@/components/ui/dialog"
 import { HeadphonesIcon, Plus, MessageSquare, Clock, CheckCircle, Search, Filter, Eye, Edit } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { AddKnowledgeBaseModal } from "@/components/add-knowledge-base-modal"
+import { smsService } from "@/lib/sms-service"
 
 export default function SupportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [newTicketOpen, setNewTicketOpen] = useState(false)
+  const [addArticleOpen, setAddArticleOpen] = useState(false)
+  const [tickets, setTickets] = useState([])
+  const [customers, setCustomers] = useState([])
+  const [employees, setEmployees] = useState([])
+  const [knowledgeBase, setKnowledgeBase] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newTicket, setNewTicket] = useState({
+    customer_id: "",
+    subject: "",
+    description: "",
+    priority: "medium",
+    assigned_to: "",
+  })
   const { toast } = useToast()
 
-  const tickets = [
-    {
-      id: "TKT-001",
-      customer: "John Doe",
-      subject: "Internet connection issues",
-      priority: "high",
-      status: "open",
-      created: "2024-01-15",
-      assignee: "Tech Support",
-    },
-    {
-      id: "TKT-002",
-      customer: "Jane Smith",
-      subject: "Billing inquiry",
-      priority: "medium",
-      status: "in_progress",
-      created: "2024-01-14",
-      assignee: "Billing Team",
-    },
-    {
-      id: "TKT-003",
-      customer: "Bob Johnson",
-      subject: "Speed upgrade request",
-      priority: "low",
-      status: "resolved",
-      created: "2024-01-13",
-      assignee: "Sales Team",
-    },
-    {
-      id: "TKT-004",
-      customer: "Alice Brown",
-      subject: "Router configuration help",
-      priority: "medium",
-      status: "open",
-      created: "2024-01-12",
-      assignee: "Tech Support",
-    },
-    {
-      id: "TKT-005",
-      customer: "Charlie Wilson",
-      subject: "Service cancellation",
-      priority: "high",
-      status: "in_progress",
-      created: "2024-01-11",
-      assignee: "Customer Service",
-    },
-  ]
+  useEffect(() => {
+    fetchData()
+    smsService.loadConfig()
+  }, [])
 
-  const knowledgeBase = [
-    { id: 1, title: "How to reset your router", category: "Technical", views: 1250, lastUpdated: "2024-01-10" },
-    { id: 2, title: "Understanding your bill", category: "Billing", views: 890, lastUpdated: "2024-01-08" },
-    { id: 3, title: "Speed test troubleshooting", category: "Technical", views: 2100, lastUpdated: "2024-01-05" },
-    { id: 4, title: "Payment methods accepted", category: "Billing", views: 650, lastUpdated: "2024-01-03" },
-    { id: 5, title: "Service plan comparison", category: "General", views: 1800, lastUpdated: "2024-01-01" },
-  ]
+  const fetchData = async () => {
+    try {
+      const [ticketsRes, customersRes, employeesRes, kbRes] = await Promise.all([
+        fetch("/api/support/tickets"),
+        fetch("/api/support/customers"),
+        fetch("/api/support/employees"),
+        fetch("/api/support/knowledge-base"),
+      ])
 
-  const filteredTickets = tickets.filter((ticket) => {
-    const matchesSearch =
-      ticket.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.id.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = filterStatus === "all" || ticket.status === filterStatus
-    return matchesSearch && matchesFilter
-  })
+      const ticketsData = await ticketsRes.json()
+      const customersData = await customersRes.json()
+      const employeesData = await employeesRes.json()
+      const kbData = await kbRes.json()
+
+      setTickets(ticketsData.tickets || [])
+      setCustomers(customersData.customers || [])
+      setEmployees(employeesData.employees || [])
+      setKnowledgeBase(kbData.articles || [])
+    } catch (error) {
+      console.error("Error fetching data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load support data",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -119,12 +104,61 @@ export default function SupportPage() {
     }
   }
 
-  const handleCreateTicket = () => {
-    toast({
-      title: "Ticket Created",
-      description: "New support ticket has been created successfully.",
-    })
-    setNewTicketOpen(false)
+  const handleCreateTicket = async () => {
+    try {
+      const response = await fetch("/api/support/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTicket),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const ticket = data.ticket
+
+        toast({
+          title: "Ticket Created",
+          description: "New support ticket has been created successfully.",
+        })
+
+        if (newTicket.assigned_to) {
+          const assignedEmployee = employees.find((emp) => emp.id.toString() === newTicket.assigned_to)
+          if (assignedEmployee?.phone) {
+            const smsSuccess = await smsService.sendTicketAssignmentAlert(
+              assignedEmployee.phone,
+              ticket.ticket_number || `TKT-${ticket.id}`,
+              newTicket.priority,
+              newTicket.subject,
+            )
+
+            if (smsSuccess) {
+              toast({
+                title: "SMS Alert Sent",
+                description: `Assignment notification sent to ${assignedEmployee.name}`,
+              })
+            }
+          }
+        }
+
+        setNewTicketOpen(false)
+        setNewTicket({
+          customer_id: "",
+          subject: "",
+          description: "",
+          priority: "medium",
+          assigned_to: "",
+        })
+        fetchData() // Refresh data
+      } else {
+        throw new Error("Failed to create ticket")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create ticket",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleTicketAction = (ticketId: string, action: string) => {
@@ -153,24 +187,37 @@ export default function SupportPage() {
             <div className="space-y-4">
               <div>
                 <Label htmlFor="customer">Customer</Label>
-                <Select>
+                <Select
+                  value={newTicket.customer_id}
+                  onValueChange={(value) => setNewTicket({ ...newTicket, customer_id: value })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="john">John Doe</SelectItem>
-                    <SelectItem value="jane">Jane Smith</SelectItem>
-                    <SelectItem value="bob">Bob Johnson</SelectItem>
+                    {customers.map((customer: any) => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label htmlFor="subject">Subject</Label>
-                <Input id="subject" placeholder="Brief description of the issue" />
+                <Input
+                  id="subject"
+                  placeholder="Brief description of the issue"
+                  value={newTicket.subject}
+                  onChange={(e) => setNewTicket({ ...newTicket, subject: e.target.value })}
+                />
               </div>
               <div>
                 <Label htmlFor="priority">Priority</Label>
-                <Select>
+                <Select
+                  value={newTicket.priority}
+                  onValueChange={(value) => setNewTicket({ ...newTicket, priority: value })}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
@@ -183,8 +230,32 @@ export default function SupportPage() {
                 </Select>
               </div>
               <div>
+                <Label htmlFor="assignee">Assign To</Label>
+                <Select
+                  value={newTicket.assigned_to}
+                  onValueChange={(value) => setNewTicket({ ...newTicket, assigned_to: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.map((employee: any) => (
+                      <SelectItem key={employee.id} value={employee.id.toString()}>
+                        {employee.name} - {employee.department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <Label htmlFor="description">Description</Label>
-                <Textarea id="description" placeholder="Detailed description of the issue" rows={3} />
+                <Textarea
+                  id="description"
+                  placeholder="Detailed description of the issue"
+                  rows={3}
+                  value={newTicket.description}
+                  onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
+                />
               </div>
             </div>
             <DialogFooter>
@@ -293,7 +364,7 @@ export default function SupportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTickets.map((ticket) => (
+                    {tickets.map((ticket) => (
                       <TableRow key={ticket.id}>
                         <TableCell className="font-medium">{ticket.id}</TableCell>
                         <TableCell>{ticket.customer}</TableCell>
@@ -375,8 +446,12 @@ export default function SupportPage() {
         <TabsContent value="resolved" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Resolved Tickets</CardTitle>
-              <CardDescription>Recently resolved support tickets</CardDescription>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-2 sm:space-y-0">
+                <div>
+                  <CardTitle>Resolved Tickets</CardTitle>
+                  <CardDescription>Recently resolved support tickets</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -421,7 +496,7 @@ export default function SupportPage() {
                   <CardTitle>Knowledge Base</CardTitle>
                   <CardDescription>Common solutions and documentation</CardDescription>
                 </div>
-                <Button className="w-full sm:w-auto">
+                <Button className="w-full sm:w-auto" onClick={() => setAddArticleOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Article
                 </Button>
@@ -440,14 +515,16 @@ export default function SupportPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {knowledgeBase.map((article) => (
+                    {knowledgeBase.map((article: any) => (
                       <TableRow key={article.id}>
                         <TableCell className="font-medium max-w-xs truncate">{article.title}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{article.category}</Badge>
                         </TableCell>
                         <TableCell className="hidden sm:table-cell">{article.views}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{article.lastUpdated}</TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          {new Date(article.updated_at).toLocaleDateString()}
+                        </TableCell>
                         <TableCell>
                           <div className="flex space-x-1">
                             <Button variant="ghost" size="sm">
@@ -467,6 +544,13 @@ export default function SupportPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AddKnowledgeBaseModal
+        open={addArticleOpen}
+        onOpenChange={setAddArticleOpen}
+        onArticleAdded={fetchData}
+        employees={employees}
+      />
     </div>
   )
 }

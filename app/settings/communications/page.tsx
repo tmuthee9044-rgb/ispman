@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,37 +30,114 @@ export default function CommunicationsSettingsPage() {
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [showPasswords, setShowPasswords] = useState(false)
-  const [emailStatus, setEmailStatus] = useState<"connected" | "disconnected" | "testing">("connected")
+  const [emailStatus, setEmailStatus] = useState<"connected" | "disconnected" | "testing">("disconnected")
   const [smsStatus, setSmsStatus] = useState<"connected" | "disconnected" | "testing">("disconnected")
+  const [commConfig, setCommConfig] = useState(null)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
-  const handleSave = async () => {
+  useEffect(() => {
+    fetchCommConfig()
+  }, [])
+
+  const fetchCommConfig = async () => {
+    try {
+      const response = await fetch("/api/communication-settings")
+      const data = await response.json()
+      setCommConfig(data)
+
+      setEmailStatus(data.email?.enabled && data.email?.smtpHost ? "connected" : "disconnected")
+      setSmsStatus(data.sms?.enabled && data.sms?.apiKey ? "connected" : "disconnected")
+    } catch (error) {
+      console.error("Error fetching communication config:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load communication settings",
+        variant: "destructive",
+      })
+    } finally {
+      setIsInitialLoading(false)
+    }
+  }
+
+  const handleSave = async (type: string, settings: any) => {
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setIsLoading(false)
-    toast({
-      title: "Settings saved",
-      description: "Communication settings have been updated successfully.",
-    })
+    try {
+      const response = await fetch("/api/communication-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, settings }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Settings saved",
+          description: `${type.toUpperCase()} settings have been updated and will control message behavior.`,
+        })
+        await fetchCommConfig()
+      } else {
+        throw new Error("Failed to save settings")
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save communication settings",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const testEmailConnection = async () => {
-    setEmailStatus("testing")
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setEmailStatus("connected")
-    toast({
-      title: "Email test successful",
-      description: "Test email sent successfully.",
-    })
-  }
+  const testConnection = async (type: string, config: any) => {
+    if (type === "email") {
+      setEmailStatus("testing")
+    } else {
+      setSmsStatus("testing")
+    }
 
-  const testSmsConnection = async () => {
-    setSmsStatus("testing")
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setSmsStatus("connected")
-    toast({
-      title: "SMS test successful",
-      description: "Test SMS sent successfully.",
-    })
+    try {
+      const response = await fetch("/api/communication-settings/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, config }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        if (type === "email") {
+          setEmailStatus("connected")
+        } else {
+          setSmsStatus("connected")
+        }
+        toast({
+          title: "Test successful",
+          description: result.message,
+        })
+      } else {
+        if (type === "email") {
+          setEmailStatus("disconnected")
+        } else {
+          setSmsStatus("disconnected")
+        }
+        toast({
+          title: "Test failed",
+          description: result.message || "Connection test failed",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      if (type === "email") {
+        setEmailStatus("disconnected")
+      } else {
+        setSmsStatus("disconnected")
+      }
+      toast({
+        title: "Error",
+        description: "Failed to test connection",
+        variant: "destructive",
+      })
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -91,6 +168,10 @@ export default function CommunicationsSettingsPage() {
     }
   }
 
+  if (isInitialLoading) {
+    return <div className="flex-1 p-8">Loading communication settings...</div>
+  }
+
   return (
     <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
       <div className="flex items-center justify-between">
@@ -99,13 +180,13 @@ export default function CommunicationsSettingsPage() {
           <p className="text-muted-foreground">Configure email and SMS services for customer communications</p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={fetchCommConfig}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Reset
+            Refresh
           </Button>
-          <Button onClick={handleSave} disabled={isLoading}>
+          <Button onClick={() => handleSave("all", commConfig)} disabled={isLoading}>
             {isLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save Changes
+            Save All Changes
           </Button>
         </div>
       </div>
@@ -134,11 +215,29 @@ export default function CommunicationsSettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="smtp-host">SMTP Host *</Label>
-                  <Input id="smtp-host" placeholder="smtp.gmail.com" defaultValue="smtp.gmail.com" />
+                  <Input
+                    id="smtp-host"
+                    placeholder="smtp.gmail.com"
+                    value={commConfig?.email?.smtpHost || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, smtpHost: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp-port">SMTP Port</Label>
-                  <Select defaultValue="587">
+                  <Select
+                    value={commConfig?.email?.smtpPort || "587"}
+                    onValueChange={(value) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, smtpPort: value },
+                      }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -154,7 +253,13 @@ export default function CommunicationsSettingsPage() {
                   <Input
                     id="smtp-username"
                     placeholder="your-email@gmail.com"
-                    defaultValue="noreply@techconnect.co.ke"
+                    value={commConfig?.email?.smtpUsername || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, smtpUsername: e.target.value },
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -164,7 +269,13 @@ export default function CommunicationsSettingsPage() {
                       id="smtp-password"
                       type={showPasswords ? "text" : "password"}
                       placeholder="Enter password"
-                      defaultValue="app_password_123"
+                      value={commConfig?.email?.smtpPassword || ""}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, smtpPassword: e.target.value },
+                        }))
+                      }
                       className="flex-1"
                     />
                     <Button variant="outline" size="icon" onClick={() => setShowPasswords(!showPasswords)}>
@@ -177,15 +288,31 @@ export default function CommunicationsSettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="from-name">From Name</Label>
-                  <Input id="from-name" placeholder="TechConnect ISP" defaultValue="TechConnect ISP" />
+                  <Input
+                    id="from-name"
+                    placeholder="Your Company Name"
+                    value={commConfig?.email?.fromName || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, fromName: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="from-email">From Email</Label>
                   <Input
                     id="from-email"
                     type="email"
-                    placeholder="noreply@techconnect.co.ke"
-                    defaultValue="noreply@techconnect.co.ke"
+                    placeholder="noreply@yourcompany.com"
+                    value={commConfig?.email?.fromEmail || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, fromEmail: e.target.value },
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -193,13 +320,27 @@ export default function CommunicationsSettingsPage() {
                   <Input
                     id="reply-to"
                     type="email"
-                    placeholder="support@techconnect.co.ke"
-                    defaultValue="support@techconnect.co.ke"
+                    placeholder="support@yourcompany.com"
+                    value={commConfig?.email?.replyTo || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, replyTo: e.target.value },
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="encryption">Encryption</Label>
-                  <Select defaultValue="tls">
+                  <Select
+                    value={commConfig?.email?.encryption || "tls"}
+                    onValueChange={(value) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        email: { ...prev.email, encryption: value },
+                      }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -226,43 +367,108 @@ export default function CommunicationsSettingsPage() {
                       <Label>Enable HTML Emails</Label>
                       <p className="text-sm text-muted-foreground">Send formatted HTML emails</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.email?.htmlEmails || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, htmlEmails: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Email Tracking</Label>
                       <p className="text-sm text-muted-foreground">Track email opens and clicks</p>
                     </div>
-                    <Switch />
+                    <Switch
+                      checked={commConfig?.email?.emailTracking || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, emailTracking: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Auto-retry Failed Emails</Label>
                       <p className="text-sm text-muted-foreground">Retry failed email deliveries</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.email?.autoRetry || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, autoRetry: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Email Queue</Label>
                       <p className="text-sm text-muted-foreground">Queue emails for batch sending</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.email?.emailQueue || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, emailQueue: checked },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="max-retries">Max Retries</Label>
-                    <Input id="max-retries" type="number" placeholder="3" defaultValue="3" />
+                    <Input
+                      id="max-retries"
+                      type="number"
+                      placeholder="3"
+                      value={commConfig?.email?.maxRetries || "3"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, maxRetries: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="retry-delay">Retry Delay (minutes)</Label>
-                    <Input id="retry-delay" type="number" placeholder="5" defaultValue="5" />
+                    <Input
+                      id="retry-delay"
+                      type="number"
+                      placeholder="5"
+                      value={commConfig?.email?.retryDelay || "5"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, retryDelay: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="batch-size">Batch Size</Label>
-                    <Input id="batch-size" type="number" placeholder="50" defaultValue="50" />
+                    <Input
+                      id="batch-size"
+                      type="number"
+                      placeholder="50"
+                      value={commConfig?.email?.batchSize || "50"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          email: { ...prev.email, batchSize: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -270,9 +476,16 @@ export default function CommunicationsSettingsPage() {
               <Separator />
 
               <div className="flex space-x-2">
-                <Button variant="outline" onClick={testEmailConnection} disabled={emailStatus === "testing"}>
+                <Button
+                  variant="outline"
+                  onClick={() => testConnection("email", commConfig?.email)}
+                  disabled={emailStatus === "testing"}
+                >
                   <TestTube className="mr-2 h-4 w-4" />
                   Test Email
+                </Button>
+                <Button onClick={() => handleSave("email", commConfig?.email)} disabled={isLoading}>
+                  Save Email Config
                 </Button>
                 <Button variant="outline">
                   <Mail className="mr-2 h-4 w-4" />
@@ -298,7 +511,15 @@ export default function CommunicationsSettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="sms-provider">SMS Provider</Label>
-                <Select defaultValue="africastalking">
+                <Select
+                  value={commConfig?.sms?.provider || "africastalking"}
+                  onValueChange={(value) =>
+                    setCommConfig((prev) => ({
+                      ...prev,
+                      sms: { ...prev.sms, provider: value },
+                    }))
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -314,7 +535,17 @@ export default function CommunicationsSettingsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="sms-username">Username/API Key *</Label>
-                  <Input id="sms-username" placeholder="Enter username or API key" defaultValue="your_username" />
+                  <Input
+                    id="sms-username"
+                    placeholder="Enter username or API key"
+                    value={commConfig?.sms?.username || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        sms: { ...prev.sms, username: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="sms-api-key">API Key/Token *</Label>
@@ -322,19 +553,41 @@ export default function CommunicationsSettingsPage() {
                     id="sms-api-key"
                     type={showPasswords ? "text" : "password"}
                     placeholder="Enter API key"
-                    defaultValue="your_api_key_123"
+                    value={commConfig?.sms?.apiKey || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        sms: { ...prev.sms, apiKey: e.target.value },
+                      }))
+                    }
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="sms-sender-id">Sender ID</Label>
-                  <Input id="sms-sender-id" placeholder="TECHCONNECT" defaultValue="TECHCONNECT" />
+                  <Input
+                    id="sms-sender-id"
+                    placeholder="YOURCOMPANY"
+                    value={commConfig?.sms?.senderId || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        sms: { ...prev.sms, senderId: e.target.value },
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="sms-endpoint">API Endpoint</Label>
                   <Input
                     id="sms-endpoint"
                     placeholder="https://api.africastalking.com/version1/messaging"
-                    defaultValue="https://api.africastalking.com/version1/messaging"
+                    value={commConfig?.sms?.endpoint || ""}
+                    onChange={(e) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        sms: { ...prev.sms, endpoint: e.target.value },
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -353,43 +606,108 @@ export default function CommunicationsSettingsPage() {
                       <Label>Enable Delivery Reports</Label>
                       <p className="text-sm text-muted-foreground">Track SMS delivery status</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.sms?.deliveryReports || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, deliveryReports: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Unicode Support</Label>
                       <p className="text-sm text-muted-foreground">Support special characters</p>
                     </div>
-                    <Switch />
+                    <Switch
+                      checked={commConfig?.sms?.unicodeSupport || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, unicodeSupport: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>Auto-retry Failed SMS</Label>
                       <p className="text-sm text-muted-foreground">Retry failed SMS deliveries</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.sms?.autoRetry || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, autoRetry: checked },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label>SMS Queue</Label>
                       <p className="text-sm text-muted-foreground">Queue SMS for batch sending</p>
                     </div>
-                    <Switch defaultChecked />
+                    <Switch
+                      checked={commConfig?.sms?.smsQueue || false}
+                      onCheckedChange={(checked) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, smsQueue: checked },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sms-max-retries">Max Retries</Label>
-                    <Input id="sms-max-retries" type="number" placeholder="3" defaultValue="3" />
+                    <Input
+                      id="sms-max-retries"
+                      type="number"
+                      placeholder="3"
+                      value={commConfig?.sms?.maxRetries || "3"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, maxRetries: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="sms-retry-delay">Retry Delay (minutes)</Label>
-                    <Input id="sms-retry-delay" type="number" placeholder="2" defaultValue="2" />
+                    <Input
+                      id="sms-retry-delay"
+                      type="number"
+                      placeholder="2"
+                      value={commConfig?.sms?.retryDelay || "2"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, retryDelay: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="sms-batch-size">Batch Size</Label>
-                    <Input id="sms-batch-size" type="number" placeholder="100" defaultValue="100" />
+                    <Input
+                      id="sms-batch-size"
+                      type="number"
+                      placeholder="100"
+                      value={commConfig?.sms?.batchSize || "100"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, batchSize: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
               </div>
@@ -405,11 +723,34 @@ export default function CommunicationsSettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sms-cost-per-message">Cost per SMS (KES)</Label>
-                    <Input id="sms-cost-per-message" type="number" step="0.01" placeholder="2.50" defaultValue="2.50" />
+                    <Input
+                      id="sms-cost-per-message"
+                      type="number"
+                      step="0.01"
+                      placeholder="2.50"
+                      value={commConfig?.sms?.costPerMessage || "2.50"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, costPerMessage: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="daily-sms-limit">Daily SMS Limit</Label>
-                    <Input id="daily-sms-limit" type="number" placeholder="1000" defaultValue="1000" />
+                    <Input
+                      id="daily-sms-limit"
+                      type="number"
+                      placeholder="1000"
+                      value={commConfig?.sms?.dailyLimit || "1000"}
+                      onChange={(e) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          sms: { ...prev.sms, dailyLimit: e.target.value },
+                        }))
+                      }
+                    />
                   </div>
                 </div>
 
@@ -418,16 +759,31 @@ export default function CommunicationsSettingsPage() {
                     <Label>Enable SMS Budget Alerts</Label>
                     <p className="text-sm text-muted-foreground">Alert when approaching SMS limits</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={commConfig?.sms?.budgetAlerts || false}
+                    onCheckedChange={(checked) =>
+                      setCommConfig((prev) => ({
+                        ...prev,
+                        sms: { ...prev.sms, budgetAlerts: checked },
+                      }))
+                    }
+                  />
                 </div>
               </div>
 
               <Separator />
 
               <div className="flex space-x-2">
-                <Button variant="outline" onClick={testSmsConnection} disabled={smsStatus === "testing"}>
+                <Button
+                  variant="outline"
+                  onClick={() => testConnection("sms", commConfig?.sms)}
+                  disabled={smsStatus === "testing"}
+                >
                   <TestTube className="mr-2 h-4 w-4" />
                   Test SMS
+                </Button>
+                <Button onClick={() => handleSave("sms", commConfig?.sms)} disabled={isLoading}>
+                  Save SMS Config
                 </Button>
                 <Button variant="outline">
                   <MessageSquare className="mr-2 h-4 w-4" />
@@ -551,38 +907,33 @@ export default function CommunicationsSettingsPage() {
                 <div className="space-y-4">
                   {[
                     {
+                      key: "paymentReminders",
                       title: "Payment Reminders",
                       description: "Remind customers about upcoming payments",
-                      email: true,
-                      sms: true,
                       timing: "3 days before due date",
                     },
                     {
+                      key: "paymentConfirmations",
                       title: "Payment Confirmations",
                       description: "Confirm successful payments",
-                      email: true,
-                      sms: true,
                       timing: "Immediately after payment",
                     },
                     {
+                      key: "serviceActivation",
                       title: "Service Activation",
                       description: "Notify when service is activated",
-                      email: true,
-                      sms: false,
                       timing: "Upon activation",
                     },
                     {
+                      key: "serviceSuspension",
                       title: "Service Suspension",
                       description: "Notify when service is suspended",
-                      email: true,
-                      sms: true,
                       timing: "Upon suspension",
                     },
                     {
+                      key: "maintenanceAlerts",
                       title: "Maintenance Alerts",
                       description: "Notify about scheduled maintenance",
-                      email: true,
-                      sms: false,
                       timing: "24 hours before maintenance",
                     },
                   ].map((notification, index) => (
@@ -596,11 +947,39 @@ export default function CommunicationsSettingsPage() {
                       </div>
                       <div className="flex items-center space-x-6">
                         <div className="flex items-center space-x-2">
-                          <Switch defaultChecked={notification.email} />
+                          <Switch
+                            checked={commConfig?.notifications?.[notification.key]?.email || false}
+                            onCheckedChange={(checked) =>
+                              setCommConfig((prev) => ({
+                                ...prev,
+                                notifications: {
+                                  ...prev.notifications,
+                                  [notification.key]: {
+                                    ...prev.notifications?.[notification.key],
+                                    email: checked,
+                                  },
+                                },
+                              }))
+                            }
+                          />
                           <Label className="text-sm">Email</Label>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <Switch defaultChecked={notification.sms} />
+                          <Switch
+                            checked={commConfig?.notifications?.[notification.key]?.sms || false}
+                            onCheckedChange={(checked) =>
+                              setCommConfig((prev) => ({
+                                ...prev,
+                                notifications: {
+                                  ...prev.notifications,
+                                  [notification.key]: {
+                                    ...prev.notifications?.[notification.key],
+                                    sms: checked,
+                                  },
+                                },
+                              }))
+                            }
+                          />
                           <Label className="text-sm">SMS</Label>
                         </div>
                       </div>
@@ -620,33 +999,50 @@ export default function CommunicationsSettingsPage() {
                 <div className="space-y-4">
                   {[
                     {
+                      key: "newCustomer",
                       title: "New Customer Registration",
                       description: "Notify when new customers register",
-                      enabled: true,
                       recipients: "Sales Team",
                     },
                     {
+                      key: "paymentFailures",
                       title: "Payment Failures",
                       description: "Alert when payments fail",
-                      enabled: true,
                       recipients: "Finance Team",
                     },
                     {
+                      key: "supportTickets",
                       title: "Support Tickets",
                       description: "Notify about new support tickets",
-                      enabled: true,
                       recipients: "Support Team",
                     },
                     {
+                      key: "systemAlerts",
                       title: "System Alerts",
                       description: "Critical system notifications",
-                      enabled: true,
                       recipients: "IT Team",
                     },
                   ].map((notification, index) => (
                     <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center space-x-3">
-                        <Switch defaultChecked={notification.enabled} />
+                        <Switch
+                          checked={commConfig?.notifications?.staffNotifications?.[notification.key]?.enabled || false}
+                          onCheckedChange={(checked) =>
+                            setCommConfig((prev) => ({
+                              ...prev,
+                              notifications: {
+                                ...prev.notifications,
+                                staffNotifications: {
+                                  ...prev.notifications?.staffNotifications,
+                                  [notification.key]: {
+                                    ...prev.notifications?.staffNotifications?.[notification.key],
+                                    enabled: checked,
+                                  },
+                                },
+                              },
+                            }))
+                          }
+                        />
                         <div>
                           <Label className="font-medium">{notification.title}</Label>
                           <p className="text-sm text-muted-foreground">{notification.description}</p>
@@ -669,7 +1065,18 @@ export default function CommunicationsSettingsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="reminder-days">Payment Reminder (days before due)</Label>
-                    <Select defaultValue="3">
+                    <Select
+                      value={commConfig?.notifications?.timing?.reminderDays || "3"}
+                      onValueChange={(value) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          notifications: {
+                            ...prev.notifications,
+                            timing: { ...prev.notifications?.timing, reminderDays: value },
+                          },
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -683,7 +1090,18 @@ export default function CommunicationsSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="overdue-reminder">Overdue Reminder Frequency</Label>
-                    <Select defaultValue="daily">
+                    <Select
+                      value={commConfig?.notifications?.timing?.overdueFrequency || "daily"}
+                      onValueChange={(value) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          notifications: {
+                            ...prev.notifications,
+                            timing: { ...prev.notifications?.timing, overdueFrequency: value },
+                          },
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -696,7 +1114,18 @@ export default function CommunicationsSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="maintenance-notice">Maintenance Notice (hours before)</Label>
-                    <Select defaultValue="24">
+                    <Select
+                      value={commConfig?.notifications?.timing?.maintenanceNotice || "24"}
+                      onValueChange={(value) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          notifications: {
+                            ...prev.notifications,
+                            timing: { ...prev.notifications?.timing, maintenanceNotice: value },
+                          },
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -710,7 +1139,18 @@ export default function CommunicationsSettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quiet-hours">Quiet Hours (no SMS)</Label>
-                    <Select defaultValue="22-06">
+                    <Select
+                      value={commConfig?.notifications?.timing?.quietHours || "22-06"}
+                      onValueChange={(value) =>
+                        setCommConfig((prev) => ({
+                          ...prev,
+                          notifications: {
+                            ...prev.notifications,
+                            timing: { ...prev.notifications?.timing, quietHours: value },
+                          },
+                        }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -723,6 +1163,14 @@ export default function CommunicationsSettingsPage() {
                     </Select>
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex space-x-2">
+                <Button onClick={() => handleSave("notifications", commConfig?.notifications)} disabled={isLoading}>
+                  Save Notification Settings
+                </Button>
               </div>
             </CardContent>
           </Card>

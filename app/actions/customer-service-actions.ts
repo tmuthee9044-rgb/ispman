@@ -2,6 +2,7 @@
 
 import { neon } from "@neondatabase/serverless"
 import { revalidatePath } from "next/cache"
+import { ActivityLogger } from "@/lib/activity-logger"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -130,6 +131,13 @@ export async function processPayment(formData: FormData) {
     const method = formData.get("method") as string
     const reference = formData.get("reference") as string
 
+    await ActivityLogger.logCustomerActivity(`initiated ${method} payment of KES ${amount}`, customerId.toString(), {
+      amount,
+      payment_method: method,
+      reference,
+      action: "payment_initiated",
+    })
+
     const paymentResult = await sql`
       INSERT INTO payments (
         customer_id,
@@ -157,6 +165,32 @@ export async function processPayment(formData: FormData) {
         AND status = 'active'
     `
 
+    if (method.toLowerCase().includes("mpesa") || method.toLowerCase().includes("m-pesa")) {
+      await ActivityLogger.logMpesaActivity(
+        `Customer payment completed: KES ${amount}`,
+        reference || paymentResult[0].transaction_id,
+        {
+          customer_id: customerId,
+          payment_id: paymentResult[0].id,
+          amount,
+          payment_method: method,
+          transaction_id: paymentResult[0].transaction_id,
+          status: "completed",
+          services_extended: true,
+        },
+        "SUCCESS",
+      )
+    } else {
+      await ActivityLogger.logCustomerActivity(`completed ${method} payment of KES ${amount}`, customerId.toString(), {
+        payment_id: paymentResult[0].id,
+        amount,
+        payment_method: method,
+        transaction_id: paymentResult[0].transaction_id,
+        status: "completed",
+        services_extended: true,
+      })
+    }
+
     revalidatePath(`/customers/${customerId}`)
     return {
       success: true,
@@ -164,6 +198,21 @@ export async function processPayment(formData: FormData) {
       payment: paymentResult[0],
     }
   } catch (error) {
+    const customerId = Number.parseInt(formData.get("customer_id") as string)
+    const amount = Number.parseFloat(formData.get("amount") as string)
+    const method = formData.get("method") as string
+
+    await ActivityLogger.logCustomerActivity(
+      `payment processing failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      customerId.toString(),
+      {
+        amount,
+        payment_method: method,
+        error: error instanceof Error ? error.message : "Unknown error",
+        action: "payment_failed",
+      },
+    )
+
     console.error("Error processing payment:", error)
     return { success: false, error: "Failed to process payment" }
   }

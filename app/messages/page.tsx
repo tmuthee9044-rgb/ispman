@@ -49,49 +49,18 @@ import {
   type Message,
 } from "@/app/actions/message-actions"
 
-// Mock customer data
-const mockCustomers = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "+254712345678",
-    status: "active",
-    plan: "Premium 50Mbps",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@example.com",
-    phone: "+254712345679",
-    status: "active",
-    plan: "Basic 10Mbps",
-  },
-  {
-    id: 3,
-    name: "Bob Johnson",
-    email: "bob@example.com",
-    phone: "+254712345680",
-    status: "suspended",
-    plan: "Standard 25Mbps",
-  },
-  {
-    id: 4,
-    name: "Alice Brown",
-    email: "alice@example.com",
-    phone: "+254712345681",
-    status: "overdue",
-    plan: "Premium 50Mbps",
-  },
-  {
-    id: 5,
-    name: "Charlie Wilson",
-    email: "charlie@example.com",
-    phone: "+254712345682",
-    status: "active",
-    plan: "Enterprise 100Mbps",
-  },
-]
+// Recipient interface
+interface Recipient {
+  id: number
+  name: string
+  first_name: string
+  last_name: string
+  email: string
+  phone: string
+  status: string
+  recipient_type: "customer" | "employee"
+  plan?: string
+}
 
 export default function MessagesPage() {
   const [activeTab, setActiveTab] = useState("compose")
@@ -99,12 +68,16 @@ export default function MessagesPage() {
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<MessageTemplate | null>(null)
   const [messageHistory, setMessageHistory] = useState<Message[]>([])
-  const [selectedCustomers, setSelectedCustomers] = useState<number[]>([])
+  const [selectedRecipients, setSelectedRecipients] = useState<number[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [recipientTypeFilter, setRecipientTypeFilter] = useState("all")
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<MessageTemplate | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [recipients, setRecipients] = useState<Recipient[]>([])
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false)
+  const [commSettings, setCommSettings] = useState<any>(null)
   const [stats, setStats] = useState({
     total_messages: 0,
     sent_today: 0,
@@ -124,11 +97,32 @@ export default function MessagesPage() {
     content: "",
   })
 
+  // Template preview and variable replacement functionality
+  const [templatePreview, setTemplatePreview] = useState("")
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({})
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false)
+
   useEffect(() => {
     loadTemplates()
     loadMessageHistory()
     loadStats()
+    loadRecipients()
+    loadCommunicationSettings()
   }, [])
+
+  useEffect(() => {
+    loadRecipients()
+  }, [searchTerm, statusFilter, recipientTypeFilter])
+
+  const loadCommunicationSettings = async () => {
+    try {
+      const response = await fetch("/api/communication-settings")
+      const data = await response.json()
+      setCommSettings(data)
+    } catch (error) {
+      console.error("Error loading communication settings:", error)
+    }
+  }
 
   const loadTemplates = async () => {
     const result = await getMessageTemplates()
@@ -151,27 +145,120 @@ export default function MessagesPage() {
     }
   }
 
-  const filteredCustomers = mockCustomers.filter((customer) => {
-    const matchesSearch =
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm)
-    const matchesStatus = statusFilter === "all" || customer.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
+  const loadRecipients = async () => {
+    setIsLoadingRecipients(true)
+    try {
+      const params = new URLSearchParams({
+        type: recipientTypeFilter,
+        search: searchTerm,
+        status: statusFilter,
+      })
 
-  const handleTemplateSelect = (template: MessageTemplate) => {
+      const response = await fetch(`/api/messages/recipients?${params}`)
+      const data = await response.json()
+
+      if (data.success) {
+        setRecipients(data.recipients)
+      } else {
+        toast({
+          title: "Error loading recipients",
+          description: data.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error loading recipients",
+        description: "Failed to fetch recipients",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingRecipients(false)
+    }
+  }
+
+  const filteredRecipients = recipients
+
+  const handleTemplateSelect = async (template: MessageTemplate) => {
     setSelectedTemplate(template)
     setMessageType(template.type)
     setSubject(template.subject || "")
-    setContent(template.content)
+
+    // Extract variables from template content
+    const variables = template.variables || []
+    const variableValues: Record<string, string> = {}
+
+    variables.forEach((variable) => {
+      switch (variable) {
+        case "customer_name":
+        case "first_name":
+          variableValues[variable] = "{{customer_name}}"
+          break
+        case "company_name":
+          variableValues[variable] = commSettings?.email?.fromName || "Your ISP Company"
+          break
+        case "current_date":
+          variableValues[variable] = new Date().toLocaleDateString()
+          break
+        case "support_email":
+          variableValues[variable] = commSettings?.email?.replyTo || "support@yourisp.com"
+          break
+        case "support_phone":
+          variableValues[variable] = "+1-800-SUPPORT"
+          break
+        default:
+          variableValues[variable] = `{{${variable}}}`
+      }
+    })
+
+    setTemplateVariables(variableValues)
+
+    // Replace variables in content for preview
+    let processedContent = template.content
+    Object.entries(variableValues).forEach(([key, value]) => {
+      const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g")
+      processedContent = processedContent.replace(regex, value)
+    })
+
+    setContent(processedContent)
+    setTemplatePreview(processedContent)
+
+    toast({
+      title: "Template loaded",
+      description: `${template.name} template has been applied with ${variables.length} variables`,
+    })
+  }
+
+  const handlePreviewTemplate = (template: MessageTemplate) => {
+    setSelectedTemplate(template)
+    setTemplatePreview(template.content)
+    setShowTemplatePreview(true)
   }
 
   const handleSendMessage = async () => {
-    if (selectedCustomers.length === 0) {
+    if (commSettings && !commSettings[messageType]?.enabled) {
+      toast({
+        title: `${messageType.toUpperCase()} messaging disabled`,
+        description: `${messageType.toUpperCase()} messaging is disabled in communication settings. Please enable it first.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (selectedRecipients.length === 0) {
       toast({
         title: "No recipients selected",
-        description: "Please select at least one customer to send the message to.",
+        description: "Please select at least one recipient to send the message to.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const batchSize = commSettings?.[messageType]?.batchSize || (messageType === "email" ? 50 : 100)
+    if (selectedRecipients.length > batchSize) {
+      toast({
+        title: "Batch size limit exceeded",
+        description: `Maximum ${batchSize} recipients allowed per ${messageType} batch. Please reduce your selection.`,
         variant: "destructive",
       })
       return
@@ -200,7 +287,7 @@ export default function MessagesPage() {
     try {
       const formData = new FormData()
       formData.append("type", messageType)
-      formData.append("recipients", JSON.stringify(selectedCustomers))
+      formData.append("recipients", JSON.stringify(selectedRecipients))
       formData.append("subject", subject)
       formData.append("content", content)
       if (selectedTemplate) {
@@ -216,7 +303,7 @@ export default function MessagesPage() {
         })
 
         // Reset form
-        setSelectedCustomers([])
+        setSelectedRecipients([])
         setSubject("")
         setContent("")
         setSelectedTemplate(null)
@@ -242,82 +329,56 @@ export default function MessagesPage() {
     }
   }
 
-  const handleCreateTemplate = async () => {
-    if (!templateForm.name.trim() || !templateForm.content.trim()) {
+  const handleDeleteTemplate = async (templateId: number) => {
+    const result = await deleteMessageTemplate(templateId)
+    if (result.success) {
       toast({
-        title: "Required fields missing",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
+        title: "Template deleted successfully",
+        description: result.message,
       })
-      return
-    }
-
-    try {
-      const formData = new FormData()
-      formData.append("name", templateForm.name)
-      formData.append("type", templateForm.type)
-      formData.append("category", templateForm.category)
-      formData.append("subject", templateForm.subject)
-      formData.append("content", templateForm.content)
-
-      const result = editingTemplate ? await updateMessageTemplate(formData) : await createMessageTemplate(formData)
-
-      if (result.success) {
-        toast({
-          title: editingTemplate ? "Template updated" : "Template created",
-          description: result.message,
-        })
-
-        setIsTemplateModalOpen(false)
-        setEditingTemplate(null)
-        setTemplateForm({
-          name: "",
-          type: "email",
-          category: "",
-          subject: "",
-          content: "",
-        })
-
-        loadTemplates()
-      } else {
-        toast({
-          title: "Failed to save template",
-          description: result.error,
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
+      loadTemplates()
+    } else {
       toast({
-        title: "Error saving template",
-        description: "An unexpected error occurred.",
+        title: "Failed to delete template",
+        description: result.error,
         variant: "destructive",
       })
     }
   }
 
-  const handleDeleteTemplate = async (id: number) => {
-    try {
-      const result = await deleteMessageTemplate(id)
-
+  const handleCreateTemplate = async () => {
+    if (editingTemplate) {
+      const result = await updateMessageTemplate(editingTemplate.id, templateForm)
       if (result.success) {
         toast({
-          title: "Template deleted",
+          title: "Template updated successfully",
           description: result.message,
         })
         loadTemplates()
+        setIsTemplateModalOpen(false)
       } else {
         toast({
-          title: "Failed to delete template",
+          title: "Failed to update template",
           description: result.error,
           variant: "destructive",
         })
       }
-    } catch (error) {
-      toast({
-        title: "Error deleting template",
-        description: "An unexpected error occurred.",
-        variant: "destructive",
-      })
+    } else {
+      const result = await createMessageTemplate(templateForm)
+      if (result.success) {
+        toast({
+          title: "Template created successfully",
+          description: result.message,
+        })
+        loadTemplates()
+        setIsTemplateModalOpen(false)
+      } else {
+        toast({
+          title: "Failed to create template",
+          description: result.error,
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -351,6 +412,16 @@ export default function MessagesPage() {
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Messages</h2>
         <div className="flex items-center space-x-2">
+          {commSettings && (
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+              <Badge variant={commSettings.email?.enabled ? "default" : "secondary"}>
+                Email {commSettings.email?.enabled ? "ON" : "OFF"}
+              </Badge>
+              <Badge variant={commSettings.sms?.enabled ? "default" : "secondary"}>
+                SMS {commSettings.sms?.enabled ? "ON" : "OFF"}
+              </Badge>
+            </div>
+          )}
           <Button onClick={() => setIsTemplateModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             New Template
@@ -419,7 +490,7 @@ export default function MessagesPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Send Message</CardTitle>
-                <CardDescription>Send SMS or email messages to customers</CardDescription>
+                <CardDescription>Send SMS or email messages to customers and employees</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex space-x-2">
@@ -492,7 +563,7 @@ export default function MessagesPage() {
 
                 <Button
                   onClick={handleSendMessage}
-                  disabled={isSending || selectedCustomers.length === 0}
+                  disabled={isSending || selectedRecipients.length === 0}
                   className="w-full"
                 >
                   {isSending ? (
@@ -503,30 +574,40 @@ export default function MessagesPage() {
                   ) : (
                     <>
                       <Send className="mr-2 h-4 w-4" />
-                      Send to {selectedCustomers.length} customer{selectedCustomers.length !== 1 ? "s" : ""}
+                      Send to {selectedRecipients.length} recipient{selectedRecipients.length !== 1 ? "s" : ""}
                     </>
                   )}
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Customer Selection */}
+            {/* Recipient Selection */}
             <Card>
               <CardHeader>
                 <CardTitle>Select Recipients</CardTitle>
-                <CardDescription>Choose customers to send the message to</CardDescription>
+                <CardDescription>Choose customers and employees to send the message to</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex space-x-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search customers..."
+                      placeholder="Search recipients..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-8"
                     />
                   </div>
+                  <Select value={recipientTypeFilter} onValueChange={setRecipientTypeFilter}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="customers">Customers</SelectItem>
+                      <SelectItem value="employees">Employees</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-32">
                       <SelectValue />
@@ -541,43 +622,57 @@ export default function MessagesPage() {
                 </div>
 
                 <ScrollArea className="h-96">
-                  <div className="space-y-2">
-                    {filteredCustomers.map((customer) => (
-                      <div key={customer.id} className="flex items-center space-x-2 p-2 border rounded">
-                        <Checkbox
-                          checked={selectedCustomers.includes(customer.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedCustomers([...selectedCustomers, customer.id])
-                            } else {
-                              setSelectedCustomers(selectedCustomers.filter((id) => id !== customer.id))
-                            }
-                          }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{customer.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {messageType === "email" ? customer.email : customer.phone}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{customer.plan}</p>
+                  {isLoadingRecipients ? (
+                    <div className="flex items-center justify-center h-32">
+                      <div className="text-sm text-muted-foreground">Loading recipients...</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredRecipients.map((recipient) => (
+                        <div
+                          key={`${recipient.recipient_type}-${recipient.id}`}
+                          className="flex items-center space-x-2 p-2 border rounded"
+                        >
+                          <Checkbox
+                            checked={selectedRecipients.includes(recipient.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedRecipients([...selectedRecipients, recipient.id])
+                              } else {
+                                setSelectedRecipients(selectedRecipients.filter((id) => id !== recipient.id))
+                              }
+                            }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <p className="text-sm font-medium truncate">{recipient.name}</p>
+                              <Badge variant={recipient.recipient_type === "customer" ? "default" : "secondary"}>
+                                {recipient.recipient_type}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {messageType === "email" ? recipient.email : recipient.phone}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{recipient.plan}</p>
+                          </div>
+                          {getStatusBadge(recipient.status)}
                         </div>
-                        {getStatusBadge(customer.status)}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </ScrollArea>
 
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{selectedCustomers.length} selected</span>
+                  <span>{selectedRecipients.length} selected</span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const allIds = filteredCustomers.map((c) => c.id)
-                      setSelectedCustomers(selectedCustomers.length === allIds.length ? [] : allIds)
+                      const allIds = filteredRecipients.map((r) => r.id)
+                      setSelectedRecipients(selectedRecipients.length === allIds.length ? [] : allIds)
                     }}
                   >
-                    {selectedCustomers.length === filteredCustomers.length ? "Deselect All" : "Select All"}
+                    {selectedRecipients.length === filteredRecipients.length ? "Deselect All" : "Select All"}
                   </Button>
                 </div>
               </CardContent>
@@ -670,6 +765,22 @@ export default function MessagesPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          onClick={() => handlePreviewTemplate(template)}
+                          title="Preview template"
+                        >
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTemplateSelect(template)}
+                          title="Use template"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setEditingTemplate(template)
                             setTemplateForm({
@@ -681,13 +792,16 @@ export default function MessagesPage() {
                             })
                             setIsTemplateModalOpen(true)
                           }}
+                          title="Edit template"
                         >
                           <Edit className="h-3 w-3" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleTemplateSelect(template)}>
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDeleteTemplate(template.id)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteTemplate(template.id)}
+                          title="Delete template"
+                        >
                           <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
@@ -793,6 +907,88 @@ export default function MessagesPage() {
               Cancel
             </Button>
             <Button onClick={handleCreateTemplate}>{editingTemplate ? "Update Template" : "Create Template"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Preview Modal */}
+      <Dialog open={showTemplatePreview} onOpenChange={setShowTemplatePreview}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Template Preview</DialogTitle>
+            <DialogDescription>Preview how the template will look when sent</DialogDescription>
+          </DialogHeader>
+
+          {selectedTemplate && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Template Name</Label>
+                  <p className="text-sm font-medium">{selectedTemplate.name}</p>
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <Badge variant={selectedTemplate.type === "email" ? "default" : "secondary"}>
+                    {selectedTemplate.type.toUpperCase()}
+                  </Badge>
+                </div>
+              </div>
+
+              <div>
+                <Label>Category</Label>
+                <p className="text-sm text-muted-foreground">{selectedTemplate.category}</p>
+              </div>
+
+              {selectedTemplate.type === "email" && selectedTemplate.subject && (
+                <div>
+                  <Label>Subject</Label>
+                  <p className="text-sm font-medium">{selectedTemplate.subject}</p>
+                </div>
+              )}
+
+              <div>
+                <Label>Content</Label>
+                <div className="border rounded-md p-3 bg-muted/50">
+                  <pre className="text-sm whitespace-pre-wrap">{templatePreview}</pre>
+                </div>
+              </div>
+
+              {selectedTemplate.variables && selectedTemplate.variables.length > 0 && (
+                <div>
+                  <Label>Variables ({selectedTemplate.variables.length})</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {selectedTemplate.variables.map((variable) => (
+                      <Badge key={variable} variant="outline">
+                        {`{{${variable}}}`}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                <p>Used {selectedTemplate.usage_count} times</p>
+                <p>Created: {new Date(selectedTemplate.created_at).toLocaleDateString()}</p>
+                <p>Last updated: {new Date(selectedTemplate.updated_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTemplatePreview(false)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedTemplate) {
+                  handleTemplateSelect(selectedTemplate)
+                  setShowTemplatePreview(false)
+                  setActiveTab("compose")
+                }
+              }}
+            >
+              Use Template
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

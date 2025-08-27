@@ -59,6 +59,128 @@ export interface MessageCampaign {
   failed_count: number
 }
 
+async function getCommunicationSettings() {
+  try {
+    const settings = await sql`
+      SELECT config_key, config_value 
+      FROM system_config 
+      WHERE config_key LIKE 'communication.%'
+    `
+
+    const commConfig = {
+      email: {
+        enabled: false,
+        smtpHost: "",
+        smtpPort: "587",
+        smtpUsername: "",
+        smtpPassword: "",
+        fromName: "Your ISP Company",
+        fromEmail: "noreply@yourisp.com",
+        replyTo: "support@yourisp.com",
+        encryption: "tls",
+        htmlEmails: true,
+        emailTracking: false,
+        autoRetry: true,
+        emailQueue: true,
+        maxRetries: 3,
+        retryDelay: 5,
+        batchSize: 50,
+      },
+      sms: {
+        enabled: false,
+        provider: "africastalking",
+        username: "",
+        apiKey: "",
+        senderId: "YourISP",
+        endpoint: "",
+        deliveryReports: true,
+        unicodeSupport: false,
+        autoRetry: true,
+        smsQueue: true,
+        maxRetries: 3,
+        retryDelay: 2,
+        batchSize: 100,
+        costPerMessage: 2.5,
+        dailyLimit: 1000,
+        budgetAlerts: true,
+      },
+      notifications: {
+        paymentReminders: { email: true, sms: true },
+        paymentConfirmations: { email: true, sms: true },
+        serviceActivation: { email: true, sms: false },
+        serviceSuspension: { email: true, sms: true },
+        maintenanceAlerts: { email: true, sms: false },
+        staffNotifications: {
+          newCustomer: { enabled: true },
+          paymentFailures: { enabled: true },
+          supportTickets: { enabled: true },
+          systemAlerts: { enabled: true },
+        },
+        timing: {
+          reminderDays: 3,
+          overdueFrequency: "daily",
+          maintenanceNotice: 24,
+          quietHours: "22-06",
+        },
+      },
+    }
+
+    settings.forEach((setting) => {
+      const keys = setting.config_key.replace("communication.", "").split(".")
+      const value = JSON.parse(setting.config_value)
+
+      if (keys[0] === "email") {
+        commConfig.email[keys[1]] = value
+      } else if (keys[0] === "sms") {
+        commConfig.sms[keys[1]] = value
+      } else if (keys[0] === "notifications") {
+        if (keys[1] === "timing") {
+          commConfig.notifications.timing[keys[2]] = value
+        } else if (keys[1] === "staffNotifications") {
+          commConfig.notifications.staffNotifications[keys[2]] = value
+        } else {
+          commConfig.notifications[keys[1]] = value
+        }
+      }
+    })
+
+    return commConfig
+  } catch (error) {
+    console.error("Error fetching communication settings:", error)
+    // Return default settings if fetch fails
+    return {
+      email: { enabled: false, fromName: "Your ISP Company", fromEmail: "noreply@yourisp.com" },
+      sms: { enabled: false, senderId: "YourISP" },
+      notifications: {},
+    }
+  }
+}
+
+async function canSendMessage(type: "email" | "sms"): Promise<{ canSend: boolean; reason?: string }> {
+  const settings = await getCommunicationSettings()
+
+  // Check if message type is enabled
+  if (!settings[type].enabled) {
+    return { canSend: false, reason: `${type.toUpperCase()} messaging is disabled in communication settings` }
+  }
+
+  // Check quiet hours for SMS
+  if (type === "sms" && settings.notifications?.timing?.quietHours) {
+    const quietHours = settings.notifications.timing.quietHours
+    const [startHour, endHour] = quietHours.split("-").map((h) => Number.parseInt(h))
+    const currentHour = new Date().getHours()
+
+    if (
+      (startHour > endHour && (currentHour >= startHour || currentHour < endHour)) ||
+      (startHour < endHour && currentHour >= startHour && currentHour < endHour)
+    ) {
+      return { canSend: false, reason: `SMS sending is disabled during quiet hours (${quietHours})` }
+    }
+  }
+
+  return { canSend: true }
+}
+
 export async function getMessageTemplates(type?: "email" | "sms") {
   try {
     let query = `
@@ -163,20 +285,62 @@ export async function sendMessage(formData: FormData) {
     const templateId = formData.get("template_id") ? Number.parseInt(formData.get("template_id") as string) : null
     const campaignId = formData.get("campaign_id") ? Number.parseInt(formData.get("campaign_id") as string) : null
 
-    // Get customer details for recipients
-    const customers = await sql`
-      SELECT id, first_name, last_name, email, phone 
-      FROM customers 
-      WHERE id = ANY(${recipients})
-    `
+    const canSend = await canSendMessage(type)
+    if (!canSend.canSend) {
+      return { success: false, error: canSend.reason }
+    }
 
-    // Create message records
-    const messagePromises = customers.map(async (customer) => {
-      const recipient = type === "email" ? customer.email : customer.phone
+    const settings = await getCommunicationSettings()
+
+    // Get customer and employee details for recipients
+    const [customers, employees] = await Promise.all([
+      sql`SELECT id, first_name, last_name, email, phone FROM customers WHERE id = ANY(${recipients})`,
+      sql`SELECT id, first_name, last_name, email, phone FROM employees WHERE id = ANY(${recipients})`,
+    ])
+
+    const allRecipients = [...customers, ...employees]
+
+    const batchSize = settings[type].batchSize || (type === "email" ? 50 : 100)
+    if (recipients.length > batchSize) {
+      return {
+        success: false,
+        error: `Batch size limit exceeded. Maximum ${batchSize} recipients allowed per ${type} batch.`,
+      }
+    }
+
+    // Create message records with personalized content
+    const messagePromises = allRecipients.map(async (recipient) => {
+      const recipientAddress = type === "email" ? recipient.email : recipient.phone
+
+      // Replace variables in content for each recipient
+      let personalizedContent = content
+      let personalizedSubject = subject
+
+      const variables = {
+        customer_name: `${recipient.first_name} ${recipient.last_name}`,
+        first_name: recipient.first_name,
+        last_name: recipient.last_name,
+        email: recipient.email,
+        phone: recipient.phone,
+        current_date: new Date().toLocaleDateString(),
+        current_time: new Date().toLocaleTimeString(),
+        company_name: settings.email.fromName || "Your ISP Company",
+        support_email: settings.email.replyTo || "support@yourisp.com",
+        support_phone: "+1-800-SUPPORT", // This could be added to settings
+      }
+
+      // Replace variables in content and subject
+      Object.entries(variables).forEach(([key, value]) => {
+        const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g")
+        personalizedContent = personalizedContent.replace(regex, value)
+        if (personalizedSubject) {
+          personalizedSubject = personalizedSubject.replace(regex, value)
+        }
+      })
 
       return sql`
         INSERT INTO messages (type, recipient, subject, content, template_id, campaign_id, customer_id, status)
-        VALUES (${type}, ${recipient}, ${type === "email" ? subject : null}, ${content}, ${templateId}, ${campaignId}, ${customer.id}, 'pending')
+        VALUES (${type}, ${recipientAddress}, ${type === "email" ? personalizedSubject : null}, ${personalizedContent}, ${templateId}, ${campaignId}, ${recipient.id}, 'pending')
         RETURNING id
       `
     })
@@ -187,24 +351,33 @@ export async function sendMessage(formData: FormData) {
     if (templateId) {
       await sql`
         UPDATE message_templates 
-        SET usage_count = usage_count + ${recipients.length}
+        SET usage_count = usage_count + ${recipients.length}, updated_at = NOW()
         WHERE id = ${templateId}
       `
     }
 
-    // In a real implementation, you would queue these messages for actual sending
-    // For now, we'll mark them as sent
     const messageIds = messageResults.map((result) => result[0].id)
-    await sql`
-      UPDATE messages 
-      SET status = 'sent', sent_at = NOW()
-      WHERE id = ANY(${messageIds})
-    `
+
+    if (settings[type].autoRetry && (settings[type].emailQueue || settings[type].smsQueue)) {
+      // Messages will be processed by queue system
+      await sql`
+        UPDATE messages 
+        SET status = 'pending', created_at = NOW()
+        WHERE id = ANY(${messageIds})
+      `
+    } else {
+      // Mark as sent immediately for non-queued messages
+      await sql`
+        UPDATE messages 
+        SET status = 'sent', sent_at = NOW()
+        WHERE id = ANY(${messageIds})
+      `
+    }
 
     revalidatePath("/messages")
     return {
       success: true,
-      message: `${recipients.length} ${type} message(s) sent successfully`,
+      message: `${recipients.length} ${type} message(s) ${settings[type].emailQueue || settings[type].smsQueue ? "queued" : "sent"} successfully`,
       sent_count: recipients.length,
     }
   } catch (error) {
@@ -343,6 +516,28 @@ export async function getMessageStats() {
   } catch (error) {
     console.error("Error fetching message stats:", error)
     return { success: false, error: "Failed to fetch stats" }
+  }
+}
+
+export async function getCommunicationSettingsForMessages() {
+  try {
+    const settings = await getCommunicationSettings()
+    return {
+      success: true,
+      settings: {
+        emailEnabled: settings.email.enabled,
+        smsEnabled: settings.sms.enabled,
+        emailBatchSize: settings.email.batchSize,
+        smsBatchSize: settings.sms.batchSize,
+        quietHours: settings.notifications?.timing?.quietHours,
+        fromName: settings.email.fromName,
+        fromEmail: settings.email.fromEmail,
+        senderId: settings.sms.senderId,
+      },
+    }
+  } catch (error) {
+    console.error("Error fetching communication settings for messages:", error)
+    return { success: false, error: "Failed to fetch settings" }
   }
 }
 

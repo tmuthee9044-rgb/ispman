@@ -1,4 +1,6 @@
 "use client"
+
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,100 +13,40 @@ import type { IPSubnet, IPAllocation } from "@/types"
 import AddSubnetModal from "@/components/add-subnet-modal"
 import EditSubnetModal from "@/components/edit-subnet-modal"
 import AllocateIPModal from "@/components/allocate-ip-modal"
+import { useToast } from "@/hooks/use-toast"
 
-// Mock data - replace with actual database queries
-const mockSubnets: IPSubnet[] = [
-  {
-    id: 1,
-    name: "Main Network",
-    network: "192.168.1.0",
-    cidr: 24,
-    type: "ipv4",
-    gateway: "192.168.1.1",
-    dns_primary: "8.8.8.8",
-    dns_secondary: "8.8.4.4",
-    dhcp_enabled: true,
-    dhcp_start: "192.168.1.100",
-    dhcp_end: "192.168.1.200",
-    vlan_id: 10,
-    description: "Primary customer network",
-    total_ips: 254,
-    used_ips: 156,
-    available_ips: 98,
-    status: "active",
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: 2,
-    name: "Guest Network",
-    network: "192.168.100.0",
-    cidr: 24,
-    type: "ipv4",
-    gateway: "192.168.100.1",
-    dns_primary: "1.1.1.1",
-    dns_secondary: "1.0.0.1",
-    dhcp_enabled: true,
-    dhcp_start: "192.168.100.50",
-    dhcp_end: "192.168.100.150",
-    vlan_id: 20,
-    description: "Guest access network",
-    total_ips: 254,
-    used_ips: 45,
-    available_ips: 209,
-    status: "active",
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: 3,
-    name: "IPv6 Main",
-    network: "2001:db8::",
-    cidr: 64,
-    type: "ipv6",
-    gateway: "2001:db8::1",
-    dns_primary: "2001:4860:4860::8888",
-    dns_secondary: "2001:4860:4860::8844",
-    dhcp_enabled: false,
-    description: "IPv6 primary network",
-    total_ips: 18446744073709551616,
-    used_ips: 1250,
-    available_ips: 18446744073709550366,
-    status: "active",
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-]
+function SubnetCard({ subnet, onDelete }: { subnet: IPSubnet; onDelete: (id: number) => void }) {
+  const utilizationPercentage = subnet.total_ips > 0 ? (subnet.used_ips / subnet.total_ips) * 100 : 0
+  const { toast } = useToast()
 
-const mockAllocations: IPAllocation[] = [
-  {
-    id: 1,
-    subnet_id: 1,
-    ip_address: "192.168.1.10",
-    mac_address: "00:11:22:33:44:55",
-    hostname: "router-main",
-    device_type: "router",
-    status: "allocated",
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: 2,
-    subnet_id: 1,
-    ip_address: "192.168.1.150",
-    mac_address: "aa:bb:cc:dd:ee:ff",
-    hostname: "customer-device-001",
-    customer_id: 1,
-    device_type: "customer",
-    status: "allocated",
-    lease_expires: "2024-01-22T10:00:00Z",
-    created_at: "2024-01-15T10:00:00Z",
-    updated_at: "2024-01-15T10:00:00Z",
-  },
-]
+  const handleDelete = async () => {
+    try {
+      const response = await fetch(`/api/subnets/${subnet.id}`, {
+        method: "DELETE",
+      })
 
-function SubnetCard({ subnet }: { subnet: IPSubnet }) {
-  const utilizationPercentage = (subnet.used_ips / subnet.total_ips) * 100
+      if (response.ok) {
+        onDelete(subnet.id)
+        toast({
+          title: "Subnet deleted",
+          description: "The subnet has been successfully deleted.",
+        })
+      } else {
+        const error = await response.json()
+        toast({
+          title: "Error",
+          description: error.error || "Failed to delete subnet",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete subnet",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <Card>
@@ -126,7 +68,7 @@ function SubnetCard({ subnet }: { subnet: IPSubnet }) {
                 Edit
               </DropdownMenuItem>
             </EditSubnetModal>
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuItem className="text-red-600" onClick={handleDelete}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>
@@ -239,25 +181,87 @@ function AllocationTable({ allocations }: { allocations: IPAllocation[] }) {
 }
 
 export default function IPConfigPage() {
-  const ipv4Subnets = mockSubnets.filter((s) => s.type === "ipv4")
-  const ipv6Subnets = mockSubnets.filter((s) => s.type === "ipv6")
+  const [subnets, setSubnets] = useState<IPSubnet[]>([])
+  const [allocations, setAllocations] = useState<IPAllocation[]>([])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
-  const totalSubnets = mockSubnets.length
-  const activeSubnets = mockSubnets.filter((s) => s.status === "active").length
-  const totalAllocations = mockAllocations.length
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [subnetsResponse, allocationsResponse] = await Promise.all([
+          fetch("/api/subnets"),
+          fetch("/api/ip-allocations"),
+        ])
+
+        if (subnetsResponse.ok) {
+          const subnetsData = await subnetsResponse.json()
+          setSubnets(subnetsData)
+        }
+
+        if (allocationsResponse.ok) {
+          const allocationsData = await allocationsResponse.json()
+          setAllocations(allocationsData)
+        }
+      } catch (error) {
+        console.error("Error fetching data:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load network data",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [toast])
+
+  const handleSubnetDeleted = (deletedId: number) => {
+    setSubnets(subnets.filter((subnet) => subnet.id !== deletedId))
+  }
+
+  const handleSubnetAdded = (newSubnet: IPSubnet) => {
+    setSubnets([newSubnet, ...subnets])
+  }
+
+  const handleSubnetUpdated = (updatedSubnet: IPSubnet) => {
+    setSubnets(subnets.map((subnet) => (subnet.id === updatedSubnet.id ? updatedSubnet : subnet)))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading network configuration...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const ipv4Subnets = subnets.filter((s) => s.type === "ipv4")
+  const ipv6Subnets = subnets.filter((s) => s.type === "ipv6")
+
+  const totalSubnets = subnets.length
+  const activeSubnets = subnets.filter((s) => s.status === "active").length
+  const totalAllocations = allocations.length
 
   return (
     <div className="flex-1 space-y-4 p-4 pt-6">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">IP Configuration</h2>
         <div className="flex items-center space-x-2">
-          <AllocateIPModal subnets={mockSubnets}>
+          <AllocateIPModal subnets={subnets}>
             <Button variant="outline">
               <Globe className="mr-2 h-4 w-4" />
               Allocate IP
             </Button>
           </AllocateIPModal>
-          <AddSubnetModal>
+          <AddSubnetModal onSubnetAdded={handleSubnetAdded}>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
               Add Subnet
@@ -296,7 +300,15 @@ export default function IPConfigPage() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">68%</div>
+            <div className="text-2xl font-bold">
+              {subnets.length > 0
+                ? Math.round(
+                    subnets.reduce((acc, subnet) => acc + (subnet.used_ips / subnet.total_ips) * 100, 0) /
+                      subnets.length,
+                  )
+                : 0}
+              %
+            </div>
             <p className="text-xs text-muted-foreground">Average across all subnets</p>
           </CardContent>
         </Card>
@@ -318,16 +330,26 @@ export default function IPConfigPage() {
             <TabsContent value="ipv4">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {ipv4Subnets.map((subnet) => (
-                  <SubnetCard key={subnet.id} subnet={subnet} />
+                  <SubnetCard key={subnet.id} subnet={subnet} onDelete={handleSubnetDeleted} />
                 ))}
+                {ipv4Subnets.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No IPv4 subnets configured. Click "Add Subnet" to create one.
+                  </div>
+                )}
               </div>
             </TabsContent>
 
             <TabsContent value="ipv6">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {ipv6Subnets.map((subnet) => (
-                  <SubnetCard key={subnet.id} subnet={subnet} />
+                  <SubnetCard key={subnet.id} subnet={subnet} onDelete={handleSubnetDeleted} />
                 ))}
+                {ipv6Subnets.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-muted-foreground">
+                    No IPv6 subnets configured. Click "Add Subnet" to create one.
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>
@@ -340,7 +362,13 @@ export default function IPConfigPage() {
               <CardDescription>Manage IP address assignments across all subnets</CardDescription>
             </CardHeader>
             <CardContent>
-              <AllocationTable allocations={mockAllocations} />
+              {allocations.length > 0 ? (
+                <AllocationTable allocations={allocations} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No IP allocations found. Allocate IPs to customers to see them here.
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

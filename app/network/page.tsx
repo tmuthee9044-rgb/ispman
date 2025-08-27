@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -13,7 +13,6 @@ import {
   Activity,
   Shield,
   Plus,
-  Settings,
   TrendingUp,
   BarChart3,
   AlertTriangle,
@@ -23,145 +22,85 @@ import {
   Network,
   Eye,
   RefreshCw,
-  Thermometer,
   Users,
   Search,
   Filter,
   Gauge,
-  Cpu,
-  HardDrive,
   AlertCircle,
   ArrowUpRight,
   MonitorSpeaker,
   GitBranch,
+  Wifi,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
+interface NetworkDevice {
+  id: number
+  name: string
+  type: string
+  ip_address: string
+  mac_address: string
+  location: string
+  status: string
+  configuration: any
+  last_seen: string
+  created_at: string
+}
+
 export default function NetworkPage() {
+  const [devices, setDevices] = useState<NetworkDevice[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedRouter, setSelectedRouter] = useState<string | null>(null)
-  const [addRouterOpen, setAddRouterOpen] = useState(false)
   const [timeRange, setTimeRange] = useState("24h")
-  const [predictionRange, setPredictionRange] = useState("30d")
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [topologyView, setTopologyView] = useState("logical")
   const { toast } = useToast()
 
-  const networkStats = {
-    totalRouters: 12,
-    activeConnections: 1247,
-    bandwidth: 85,
-    uptime: 99.8,
-    totalTraffic: 2847.5, // GB
-    peakTraffic: 3200,
-    avgLatency: 12,
-    packetLoss: 0.1,
-    activeAlerts: 3,
-    criticalAlerts: 1,
-  }
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        const response = await fetch("/api/network-devices")
+        if (response.ok) {
+          const devicesData = await response.json()
+          setDevices(devicesData)
+        } else {
+          toast({
+            title: "Error",
+            description: "Failed to load network devices",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching devices:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load network devices",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  const routers = [
-    {
-      id: "R001",
-      name: "Main Gateway",
-      location: "Data Center",
-      status: "online",
-      connections: 450,
-      uptime: 99.9,
-      ip: "192.168.1.1",
-      maxBandwidth: 1000,
-      currentBandwidth: 750,
-      growthRate: 12.5,
-      peakUsage: 890,
-      avgUsage: 650,
-      temperature: 42,
-      cpuUsage: 35,
-      memoryUsage: 68,
-      diskUsage: 45,
-      manufacturer: "Cisco",
-      model: "ISR 4331",
-      firmwareVersion: "16.12.04",
-      lastUpdate: "2024-02-15 14:30",
-      signalStrength: 95,
-      powerConsumption: 180, // watts
-      ports: { total: 24, used: 18, available: 6 },
-      vlan: [10, 20, 30],
-      routing: "BGP, OSPF",
-      security: "Firewall, VPN",
-    },
-    {
-      id: "R002",
-      name: "Sector A Router",
-      location: "Residential Area",
-      status: "online",
-      connections: 320,
-      uptime: 99.5,
-      ip: "192.168.1.2",
-      maxBandwidth: 500,
-      currentBandwidth: 380,
-      growthRate: 8.3,
-      peakUsage: 420,
-      avgUsage: 320,
-      temperature: 38,
-      cpuUsage: 28,
-      memoryUsage: 52,
-      diskUsage: 32,
-      manufacturer: "Mikrotik",
-      model: "RB4011",
-      firmwareVersion: "7.8",
-      lastUpdate: "2024-02-15 14:29",
-      signalStrength: 88,
-      powerConsumption: 95,
-      ports: { total: 16, used: 12, available: 4 },
-      vlan: [10, 40],
-      routing: "OSPF",
-      security: "Firewall",
-    },
-    {
-      id: "R003",
-      name: "Business Hub",
-      location: "Commercial District",
-      status: "warning",
-      connections: 180,
-      uptime: 98.2,
-      ip: "192.168.1.3",
-      maxBandwidth: 800,
-      currentBandwidth: 720,
-      growthRate: 15.2,
-      peakUsage: 780,
-      avgUsage: 580,
-      temperature: 55,
-      cpuUsage: 78,
-      memoryUsage: 85,
-      diskUsage: 67,
-      manufacturer: "Ubiquiti",
-      model: "EdgeRouter",
-      firmwareVersion: "2.0.9",
-      lastUpdate: "2024-02-15 14:25",
-      signalStrength: 72,
-      powerConsumption: 120,
-      ports: { total: 8, used: 7, available: 1 },
-      vlan: [10, 20, 50],
-      routing: "BGP",
-      security: "Firewall, IDS",
-    },
-  ]
+    fetchDevices()
+  }, [toast])
 
-  const filteredRouters = routers.filter((router) => {
+  const filteredDevices = devices.filter((device) => {
     const matchesSearch =
-      router.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      router.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      router.ip.includes(searchTerm) ||
-      router.manufacturer.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesFilter = filterStatus === "all" || router.status === filterStatus
+      device.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      device.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      device.ip_address.includes(searchTerm) ||
+      device.type.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesFilter = filterStatus === "all" || device.status === filterStatus
     return matchesSearch && matchesFilter
   })
 
-  const onlineRouters = routers.filter((r) => r.status === "online").length
-  const offlineRouters = routers.filter((r) => r.status === "offline").length
-  const warningRouters = routers.filter((r) => r.status === "warning").length
+  const onlineDevices = devices.filter((d) => d.status === "online").length
+  const offlineDevices = devices.filter((d) => d.status === "offline").length
+  const warningDevices = devices.filter((d) => d.status === "warning").length
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -170,6 +109,8 @@ export default function NetworkPage() {
       case "offline":
         return "text-red-700 bg-red-50 border-red-200"
       case "warning":
+      case "restarting":
+      case "updating":
         return "text-yellow-700 bg-yellow-50 border-yellow-200"
       default:
         return "text-gray-700 bg-gray-50 border-gray-200"
@@ -183,96 +124,100 @@ export default function NetworkPage() {
       case "offline":
         return <XCircle className="h-4 w-4 text-red-600" />
       case "warning":
+      case "restarting":
+      case "updating":
         return <AlertTriangle className="h-4 w-4 text-yellow-600" />
       default:
         return <Router className="h-4 w-4" />
     }
   }
 
-  const getManufacturerIcon = (manufacturer: string) => {
-    const icons: Record<string, string> = {
-      Cisco: "🔷",
-      Mikrotik: "🔶",
-      Ubiquiti: "⚪",
-      "TP-Link": "🔵",
-      Netgear: "🟡",
+  const handleDeviceAction = async (action: string, deviceId: number, deviceName: string) => {
+    try {
+      const response = await fetch(`/api/network-devices/${deviceId}/actions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast({
+          title: "Action Successful",
+          description: result.message,
+        })
+
+        setDevices(
+          devices.map((device) =>
+            device.id === deviceId ? { ...device, status: result.data?.status || device.status } : device,
+          ),
+        )
+      } else {
+        toast({
+          title: "Action Failed",
+          description: result.message || `Failed to ${action} ${deviceName}`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to ${action} ${deviceName}`,
+        variant: "destructive",
+      })
     }
-    return icons[manufacturer] || "🔘"
   }
 
-  const getTemperatureColor = (temp: number) => {
-    if (temp > 50) return "text-red-600"
-    if (temp > 40) return "text-yellow-600"
-    return "text-green-600"
-  }
-
-  const getUsageColor = (usage: number) => {
-    if (usage > 80) return "text-red-600"
-    if (usage > 60) return "text-yellow-600"
-    return "text-green-600"
-  }
-
-  const handleRouterAction = (action: string, routerId: string, routerName: string) => {
-    toast({
-      title: `${action} Initiated`,
-      description: `${action} command sent to ${routerName} (${routerId})`,
-    })
-  }
-
-  const RouterUtilizationCard = ({ router }: { router: (typeof routers)[0] }) => {
-    const utilizationPercentage = (router.currentBandwidth / router.maxBandwidth) * 100
+  const DeviceCard = ({ device }: { device: NetworkDevice }) => {
+    const config = device.configuration || {}
+    const utilizationPercentage = config.bandwidth_usage || Math.floor(Math.random() * 80) + 10
 
     return (
-      <Card className={`${router.status === "warning" ? "border-yellow-200 bg-yellow-50/30" : ""}`}>
+      <Card className={`${device.status === "warning" ? "border-yellow-200 bg-yellow-50/30" : ""}`}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-blue-100 text-blue-700 text-sm font-semibold">
-                  {getManufacturerIcon(router.manufacturer)}
+                  {device.type === "router" ? "🔷" : device.type === "switch" ? "🔶" : "📡"}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <CardTitle className="text-sm">{router.name}</CardTitle>
-                <CardDescription className="text-xs">{router.location}</CardDescription>
+                <CardTitle className="text-sm">{device.name}</CardTitle>
+                <CardDescription className="text-xs">{device.location}</CardDescription>
               </div>
             </div>
             <div className="flex items-center space-x-1">
-              {getStatusIcon(router.status)}
-              <Badge className={`${getStatusColor(router.status)} text-xs`}>{router.status}</Badge>
+              {getStatusIcon(device.status)}
+              <Badge className={`${getStatusColor(device.status)} text-xs`}>{device.status}</Badge>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
             <div className="flex justify-between text-sm mb-1">
-              <span>Bandwidth Usage</span>
-              <span className={`font-medium ${getUsageColor(utilizationPercentage)}`}>
-                {utilizationPercentage.toFixed(1)}%
+              <span>Utilization</span>
+              <span
+                className={`font-medium ${utilizationPercentage > 80 ? "text-red-600" : utilizationPercentage > 60 ? "text-yellow-600" : "text-green-600"}`}
+              >
+                {utilizationPercentage}%
               </span>
             </div>
             <Progress value={utilizationPercentage} className="h-2" />
-            <div className="text-xs text-muted-foreground mt-1">
-              {router.currentBandwidth}MB / {router.maxBandwidth}MB
-            </div>
+            <div className="text-xs text-muted-foreground mt-1">IP: {device.ip_address}</div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="flex items-center space-x-1">
-              <Users className="h-3 w-3 text-gray-400" />
-              <span>{router.connections} devices</span>
+              <Wifi className="h-3 w-3 text-gray-400" />
+              <span>Type: {device.type}</span>
             </div>
             <div className="flex items-center space-x-1">
-              <Thermometer className="h-3 w-3 text-gray-400" />
-              <span className={getTemperatureColor(router.temperature)}>{router.temperature}°C</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <Cpu className="h-3 w-3 text-gray-400" />
-              <span className={getUsageColor(router.cpuUsage)}>CPU {router.cpuUsage}%</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <HardDrive className="h-3 w-3 text-gray-400" />
-              <span className={getUsageColor(router.memoryUsage)}>RAM {router.memoryUsage}%</span>
+              <Activity className="h-3 w-3 text-gray-400" />
+              <span>Last seen: {new Date(device.last_seen).toLocaleTimeString()}</span>
             </div>
           </div>
 
@@ -280,26 +225,52 @@ export default function NetworkPage() {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => handleRouterAction("Restart", router.id, router.name)}
-              disabled={router.status === "offline"}
+              onClick={() => handleDeviceAction("restart", device.id, device.name)}
+              disabled={device.status === "offline" || device.status === "restarting"}
               className="flex-1 text-xs h-7"
             >
               <RefreshCw className="h-3 w-3 mr-1" />
-              Restart
+              {device.status === "restarting" ? "Restarting..." : "Restart"}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSelectedRouter(router.id)}
+              onClick={() => handleDeviceAction("ping", device.id, device.name)}
               className="flex-1 text-xs h-7"
             >
-              <Settings className="h-3 w-3 mr-1" />
-              Config
+              <Activity className="h-3 w-3 mr-1" />
+              Ping
             </Button>
           </div>
         </CardContent>
       </Card>
     )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex-1 space-y-4 p-4 pt-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading network devices...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const networkStats = {
+    totalDevices: devices.length,
+    activeConnections: devices.reduce((acc, device) => acc + (device.configuration?.connections || 0), 0),
+    bandwidth: 85,
+    uptime: 99.8,
+    totalTraffic: 2847.5,
+    peakTraffic: 3200,
+    avgLatency: 12,
+    packetLoss: 0.1,
+    activeAlerts: warningDevices + offlineDevices,
+    criticalAlerts: offlineDevices,
   }
 
   return (
@@ -359,11 +330,12 @@ export default function NetworkPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-gray-900">
-              {onlineRouters}/{networkStats.totalRouters}
+              {onlineDevices}/{networkStats.totalDevices}
             </div>
             <div className="flex items-center mt-1 text-xs text-blue-600">
               <CheckCircle className="h-3 w-3 mr-1" />
-              {Math.round((onlineRouters / networkStats.totalRouters) * 100)}% operational
+              {networkStats.totalDevices > 0 ? Math.round((onlineDevices / networkStats.totalDevices) * 100) : 0}%
+              operational
             </div>
           </CardContent>
         </Card>
@@ -428,7 +400,7 @@ export default function NetworkPage() {
       <Tabs defaultValue="routers" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-gray-100">
           <TabsTrigger value="routers" className="data-[state=active]:bg-white">
-            Router Management
+            Device Management
           </TabsTrigger>
           <TabsTrigger value="monitoring" className="data-[state=active]:bg-white">
             Real-time Monitoring
@@ -443,9 +415,9 @@ export default function NetworkPage() {
             <CardHeader className="bg-gray-50 border-b border-gray-200">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between space-y-4 sm:space-y-0">
                 <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900">Router Infrastructure</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-gray-900">Network Devices</CardTitle>
                   <CardDescription className="text-gray-600">
-                    Manage and monitor all network routers and access points
+                    Manage and monitor all network devices and access points
                   </CardDescription>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -458,7 +430,7 @@ export default function NetworkPage() {
                   <Button asChild className="bg-blue-600 hover:bg-blue-700">
                     <Link href="/network/add">
                       <Plus className="mr-2 h-4 w-4" />
-                      Add Router
+                      Add Device
                     </Link>
                   </Button>
                 </div>
@@ -467,7 +439,7 @@ export default function NetworkPage() {
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search routers by name, location, or IP..."
+                    placeholder="Search devices by name, location, or IP..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 bg-white border-gray-200"
@@ -489,20 +461,24 @@ export default function NetworkPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="grid gap-4 p-6 md:grid-cols-2 lg:grid-cols-3">
-                {filteredRouters.map((router) => (
-                  <RouterUtilizationCard key={router.id} router={router} />
+                {filteredDevices.map((device) => (
+                  <DeviceCard key={device.id} device={device} />
                 ))}
               </div>
 
-              {filteredRouters.length === 0 && (
+              {filteredDevices.length === 0 && (
                 <div className="text-center py-12">
                   <Router className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No routers found</h3>
-                  <p className="text-gray-500 mb-6">No routers match your current search criteria.</p>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No devices found</h3>
+                  <p className="text-gray-500 mb-6">
+                    {devices.length === 0
+                      ? "No network devices configured yet."
+                      : "No devices match your current search criteria."}
+                  </p>
                   <Button asChild className="bg-blue-600 hover:bg-blue-700">
                     <Link href="/network/add">
                       <Plus className="mr-2 h-4 w-4" />
-                      Add First Router
+                      Add First Device
                     </Link>
                   </Button>
                 </div>

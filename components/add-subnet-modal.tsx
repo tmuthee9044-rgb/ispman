@@ -18,17 +18,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createSubnet } from "@/app/actions/ip-actions"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
 interface AddSubnetModalProps {
   children: React.ReactNode
+  onSubnetAdded?: (subnet: any) => void
 }
 
-export default function AddSubnetModal({ children }: AddSubnetModalProps) {
+export default function AddSubnetModal({ children, onSubnetAdded }: AddSubnetModalProps) {
   const [open, setOpen] = useState(false)
   const [dhcpEnabled, setDhcpEnabled] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
 
   const handleSubmit = async (formData: FormData) => {
     startTransition(async () => {
@@ -37,14 +39,33 @@ export default function AddSubnetModal({ children }: AddSubnetModalProps) {
         const result = await createSubnet(formData)
 
         if (result?.success) {
-          toast.success(result.message || "Subnet created successfully")
+          toast({
+            title: "Success",
+            description: result.message || "Subnet created successfully",
+          })
           setOpen(false)
           setDhcpEnabled(false)
+
+          if (onSubnetAdded && result.data) {
+            onSubnetAdded(result.data)
+          }
+
+          window.location.reload()
         } else {
           setError(result?.message || "Failed to create subnet")
+          toast({
+            title: "Error",
+            description: result?.message || "Failed to create subnet",
+            variant: "destructive",
+          })
         }
       } catch (err) {
         setError("An unexpected error occurred")
+        toast({
+          title: "Error",
+          description: "An unexpected error occurred",
+          variant: "destructive",
+        })
       }
     })
   }

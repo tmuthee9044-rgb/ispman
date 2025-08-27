@@ -24,14 +24,15 @@ export async function POST(request: NextRequest) {
     const topCustomersResult = await sql`
       SELECT 
         c.first_name || ' ' || c.last_name as name,
-        cs.plan_name as plan,
+        sp.name as plan,
         COALESCE(SUM(p.amount), 0) as revenue,
         COUNT(p.id) as payment_count
       FROM customers c
       LEFT JOIN customer_services cs ON c.id = cs.customer_id
+      LEFT JOIN service_plans sp ON cs.service_plan_id = sp.id
       LEFT JOIN payments p ON c.id = p.customer_id AND p.status = 'completed'
         AND p.created_at >= ${dateFrom} AND p.created_at <= ${dateTo}
-      GROUP BY c.id, c.first_name, c.last_name, cs.plan_name
+      GROUP BY c.id, c.first_name, c.last_name, sp.name
       HAVING SUM(p.amount) > 0
       ORDER BY revenue DESC
       LIMIT 10
@@ -40,14 +41,15 @@ export async function POST(request: NextRequest) {
     // Get revenue by service plan
     const revenueByPlanResult = await sql`
       SELECT 
-        cs.plan_name,
+        sp.name as plan_name,
         COALESCE(SUM(p.amount), 0) as revenue,
         COUNT(DISTINCT c.id) as customer_count
       FROM customer_services cs
+      LEFT JOIN service_plans sp ON cs.service_plan_id = sp.id
       LEFT JOIN customers c ON cs.customer_id = c.id
       LEFT JOIN payments p ON c.id = p.customer_id AND p.status = 'completed'
         AND p.created_at >= ${dateFrom} AND p.created_at <= ${dateTo}
-      GROUP BY cs.plan_name
+      GROUP BY sp.name
       HAVING SUM(p.amount) > 0
       ORDER BY revenue DESC
     `

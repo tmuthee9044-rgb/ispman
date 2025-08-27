@@ -40,7 +40,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  BarChart3,
   Wifi,
   Server,
   Shield,
@@ -418,34 +417,37 @@ export default function FinancePage() {
       {!loading && (
         <>
           {/* Financial Overview Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(financialMetrics.totalRevenue)}</div>
-                <div className="flex items-center text-xs text-green-600">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  {financialMetrics.monthlyGrowth > 0 ? "+" : ""}
-                  {financialMetrics.monthlyGrowth.toFixed(1)}% from last month
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">From customer payments</div>
+                <div className="text-2xl font-bold">KES {financialMetrics.totalRevenue.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span
+                    className={`inline-flex items-center ${financialData.monthlyGrowth >= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    <TrendingUp className="w-3 h-3 mr-1" />
+                    {financialData.monthlyGrowth >= 0 ? "+" : ""}
+                    {financialData.monthlyGrowth.toFixed(1)}%
+                  </span>{" "}
+                  from last period
+                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-                <Receipt className="h-4 w-4 text-muted-foreground" />
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(financialMetrics.totalExpenses)}</div>
-                <div className="flex items-center text-xs text-red-600">
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  +5% from last month
-                </div>
+                <div className="text-2xl font-bold">KES {financialMetrics.totalExpenses.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-orange-600">+2.1%</span> from last month
+                </p>
               </CardContent>
             </Card>
 
@@ -458,31 +460,26 @@ export default function FinancePage() {
                 <div
                   className={`text-2xl font-bold ${financialMetrics.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
                 >
-                  {formatCurrency(financialMetrics.netProfit)}
+                  KES {financialMetrics.netProfit.toLocaleString()}
                 </div>
-                <div
-                  className={`flex items-center text-xs ${financialMetrics.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  {financialMetrics.netProfit >= 0 ? "+" : ""}
-                  {((financialMetrics.netProfit / (financialMetrics.totalRevenue || 1)) * 100).toFixed(1)}% margin
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  {financialMetrics.profitMargin.toFixed(1)}% profit margin
+                </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">Cash Flow</CardTitle>
+                <Banknote className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{financialMetrics.profitMargin.toFixed(1)}%</div>
                 <div
-                  className={`flex items-center text-xs ${financialMetrics.profitMargin >= 0 ? "text-green-600" : "text-red-600"}`}
+                  className={`text-2xl font-bold ${financialData.cashFlow >= 0 ? "text-green-600" : "text-red-600"}`}
                 >
-                  <TrendingUp className="w-3 h-3 mr-1" />
-                  {financialMetrics.profitMargin >= 0 ? "Profitable" : "Loss"}
+                  KES {financialData.cashFlow.toLocaleString()}
                 </div>
+                <p className="text-xs text-muted-foreground">Current cash position</p>
               </CardContent>
             </Card>
           </div>

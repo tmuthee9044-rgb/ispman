@@ -104,13 +104,13 @@ export async function getCustomers() {
       LEFT JOIN (
         SELECT customer_id, CONCAT(ROUND(SUM(data_used)/1024/1024/1024, 2), ' GB') as data_usage
         FROM customer_usage 
-        WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY customer_id
       ) usage ON c.id = usage.customer_id
       LEFT JOIN (
         SELECT customer_id, AVG(signal_strength) as connection_quality
         FROM network_monitoring 
-        WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '7 days'
         GROUP BY customer_id
       ) quality ON c.id = quality.customer_id
       ORDER BY c.created_at DESC
@@ -162,13 +162,13 @@ export async function getCustomer(id: number) {
       LEFT JOIN (
         SELECT customer_id, SUM(data_used)/1024/1024/1024 as data_usage
         FROM customer_usage 
-        WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '30 days'
         GROUP BY customer_id
       ) usage ON c.id = usage.customer_id
       LEFT JOIN (
         SELECT customer_id, AVG(signal_strength) as connection_quality
         FROM network_monitoring 
-        WHERE DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+        WHERE DATE(created_at) >= CURRENT_DATE - INTERVAL '7 days'
         GROUP BY customer_id
       ) quality ON c.id = quality.customer_id
       WHERE c.id = ${id}
